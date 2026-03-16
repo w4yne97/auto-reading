@@ -76,7 +76,7 @@ class Paper:
     fetched_at: datetime
     tags: list[str]          # Claude-assigned, free-form but guided by config
     category: str            # Must be one of config.yaml categories
-    status: str              # "unread" | "reading" | "read" | "archived"
+    status: str              # "unread" | "reading" | "read" | "archived" | "error"
     summary: str | None      # Claude-generated summary
     insights: list[str]      # Claude-extracted insights
     relevance_score: float   # 0-1, Claude-assessed relevance
