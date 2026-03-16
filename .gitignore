@@ -6,3 +6,19 @@ dist/
 .superpowers/
 auto-reading.db
 .env
+
+# Python
+*.py[cod]
+build/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temp
+/tmp/auto-reading/
+
+# IDE
+.vscode/
+.idea/

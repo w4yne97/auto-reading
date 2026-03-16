@@ -1,0 +1,1 @@
+"""Auto-reading shared library."""
