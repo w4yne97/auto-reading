@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import responses
 
-from tests.conftest import SAMPLE_ARXIV_XML, SAMPLE_SSR_DATA, make_alphaxiv_html
+from tests.conftest import SAMPLE_ARXIV_XML, make_alphaxiv_html
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
 
@@ -29,7 +29,7 @@ class TestSearchAndFilter:
         responses.add(
             responses.GET,
             "https://alphaxiv.org/explore",
-            body=make_alphaxiv_html(SAMPLE_SSR_DATA),
+            body=make_alphaxiv_html(),
             status=200,
         )
         _mock_arxiv_empty()
@@ -102,7 +102,7 @@ class TestSearchAndFilter:
         responses.add(
             responses.GET,
             "https://alphaxiv.org/explore",
-            body=make_alphaxiv_html(SAMPLE_SSR_DATA),
+            body=make_alphaxiv_html(),
             status=200,
         )
         _mock_arxiv_empty()
@@ -126,24 +126,20 @@ class TestSearchAndFilter:
     @responses.activate
     def test_excluded_keywords_filter(self, config_path, vault_path, output_path):
         """Test: papers matching excluded keywords are removed."""
-        ssr_with_survey = {
-            "pages": [{
-                "papers": [{
-                    "universal_paper_id": "2603.99999",
-                    "title": "A Survey of Code Generation Methods",
-                    "paper_summary": {"abstract": "This survey covers recent advances."},
-                    "authors": [{"name": "Survey Author"}],
-                    "publication_date": "2026-03-14T00:00:00.000Z",
-                    "total_votes": 10,
-                    "visits_count": {"all": 500},
-                    "topics": ["cs.AI"],
-                }],
-            }],
-        }
+        survey_paper = [{
+            "id": "2603.99999",
+            "title": "A Survey of Code Generation Methods",
+            "abstract": "This survey covers recent advances.",
+            "votes": 10,
+            "visits": 500,
+            "published": "2026-03-14T00:00:00.000Z",
+            "topics": ["cs.AI"],
+            "authors": ["Survey Author"],
+        }]
         responses.add(
             responses.GET,
             "https://alphaxiv.org/explore",
-            body=make_alphaxiv_html(ssr_with_survey),
+            body=make_alphaxiv_html(survey_paper),
             status=200,
         )
         _mock_arxiv_empty()
@@ -169,7 +165,7 @@ class TestSearchAndFilter:
         responses.add(
             responses.GET,
             "https://alphaxiv.org/explore",
-            body=make_alphaxiv_html(SAMPLE_SSR_DATA),
+            body=make_alphaxiv_html(),
             status=200,
         )
         _mock_arxiv_empty()

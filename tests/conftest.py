@@ -62,28 +62,39 @@ SAMPLE_ARXIV_XML = textwrap.dedent("""\
 """)
 
 
-SAMPLE_SSR_DATA = {
-    "pages": [{
-        "papers": [
-            {
-                "universal_paper_id": "2603.12228",
-                "title": "Neural Code Agent",
-                "paper_summary": {"abstract": "A coding agent with code generation capabilities."},
-                "authors": [{"name": "Alice"}],
-                "publication_date": "2026-03-12T17:49:30.000Z",
-                "total_votes": 39,
-                "visits_count": {"all": 1277},
-                "topics": ["Computer Science", "cs.AI", "cs.LG"],
-            },
-        ],
-    }],
+SAMPLE_SSR_PAPER = {
+    "id": "2603.12228",
+    "title": "Neural Code Agent",
+    "abstract": "A coding agent with code generation capabilities.",
+    "votes": 39,
+    "visits": 1277,
+    "published": "2026-03-12T17:49:30.000Z",
+    "topics": ["Computer Science", "cs.AI", "cs.LG"],
+    "authors": ["Alice"],
 }
 
 
-def make_alphaxiv_html(ssr_data: dict) -> str:
-    """Build a minimal HTML page with embedded SSR JSON."""
-    json_str = json.dumps(ssr_data)
-    return f"<html><script>self.$_TSR={json_str};</script></html>"
+def make_alphaxiv_html(papers: list[dict] | None = None) -> str:
+    """Build minimal HTML mimicking alphaXiv's TanStack Router SSR format."""
+    if papers is None:
+        papers = [SAMPLE_SSR_PAPER]
+    parts = ["<html><head></head><body><script>"]
+    for i, p in enumerate(papers):
+        pid = p["id"]
+        topics_str = ",".join(f'"{t}"' for t in p.get("topics", []))
+        authors_str = ",".join(f'"{a}"' for a in p.get("authors", []))
+        parts.append(f'title:"{p.get("title", "")}",abstract:"{p.get("abstract", "")}",')
+        parts.append(f'image_url:"image/{pid}v1.png",universal_paper_id:"{pid}",')
+        parts.append(
+            f"metrics:$R[{100+i*10}]={{visits_count:$R[{101+i*10}]="
+            f"{{all:{p.get('visits', 0)},last_7_days:{p.get('visits', 0)}}},"
+            f"total_votes:{p.get('votes', 0)},public_total_votes:{p.get('votes', 0) * 2}}},"
+        )
+        parts.append(f'first_publication_date:"{p.get("published", "2026-03-12T00:00:00.000Z")}",')
+        parts.append(f"topics:$R[{102+i*10}]=[{topics_str}],")
+        parts.append(f"authors:$R[{103+i*10}]=[{authors_str}],")
+    parts.append("</script></body></html>")
+    return "".join(parts)
 
 
 @pytest.fixture()

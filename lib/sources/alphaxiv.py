@@ -1,7 +1,8 @@
-"""alphaXiv scraper: extract trending papers from SSR-embedded JSON."""
+"""alphaXiv scraper: extract trending papers from SSR-embedded data."""
 
 import json
 import logging
+import re
 from datetime import date, datetime
 
 import requests
@@ -11,70 +12,95 @@ from lib.models import Paper
 logger = logging.getLogger(__name__)
 
 ALPHAXIV_URL = "https://alphaxiv.org/explore"
-_TSR_MARKER = "self.$_TSR="
-_REQUEST_TIMEOUT = 10
+_REQUEST_TIMEOUT = 15
+
+_PID_RE = re.compile(r'universal_paper_id:"(\d{4}\.\d{4,5})"')
+_TITLE_RE = re.compile(r'title:"((?:[^"\\]|\\.)*)"')
+_ABSTRACT_RE = re.compile(r'abstract:"((?:[^"\\]|\\.)*)"')
+_VISITS_RE = re.compile(r"all:(\d+)")
+_VOTES_RE = re.compile(r"total_votes:(\d+)")
+_PUB_DATE_RE = re.compile(r'first_publication_date:"([^"]+)"')
+_TOPICS_RE = re.compile(r"topics:\$R\[\d+\]=\[([^\]]+)\]")
+_AUTHORS_RE = re.compile(r'authors:\$R\[\d+\]=\[((?:"[^"]*",?)+)\]')
 
 
 class AlphaXivError(Exception):
     """Raised when alphaXiv scraping fails."""
 
 
-def _extract_tsr_json(html: str) -> dict:
-    """Extract $_TSR JSON from HTML using json.JSONDecoder.raw_decode.
-
-    This is more robust than regex for deeply nested JSON.
-    """
-    idx = html.find(_TSR_MARKER)
-    if idx == -1:
-        raise AlphaXivError("Could not find $_TSR in alphaXiv HTML")
-    idx += len(_TSR_MARKER)
-    decoder = json.JSONDecoder()
+def _parse_pub_date(raw: str) -> date:
+    """Parse ISO datetime string to date, fallback to today."""
     try:
-        data, _ = decoder.raw_decode(html, idx)
-    except json.JSONDecodeError as e:
-        raise AlphaXivError(f"Failed to parse $_TSR JSON: {e}") from e
-    return data
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+    except (ValueError, AttributeError):
+        return date.today()
 
 
-def parse_ssr_json(html: str) -> list[Paper]:
-    """Extract papers from alphaXiv SSR-embedded JSON in HTML."""
-    data = _extract_tsr_json(html)
+def _unescape_js_string(s: str) -> str:
+    """Unescape basic JS string escapes (\\n, \\", \\\\)."""
+    return s.replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
+
+
+def parse_ssr_html(html: str) -> list[Paper]:
+    """Extract papers from alphaXiv SSR-embedded data via regex.
+
+    The SSR data uses TanStack Router dehydrated format (JS object
+    literals with $R[N] references), not standard JSON. We extract
+    fields positionally using universal_paper_id as anchor:
+    - title, abstract: appear BEFORE the PID (take the last match)
+    - metrics, dates, topics, authors: appear AFTER the PID
+    """
+    pid_matches = list(_PID_RE.finditer(html))
+    if not pid_matches:
+        raise AlphaXivError("No papers found in alphaXiv HTML")
 
     papers = []
-    for page in data.get("pages", []):
-        for item in page.get("papers", []):
-            paper_id = item.get("universal_paper_id", "")
-            if not paper_id:
-                continue
+    for i, pid_m in enumerate(pid_matches):
+        pos = pid_m.start()
+        paper_id = pid_m.group(1)
 
-            authors = [a.get("name", "") for a in item.get("authors", []) if a.get("name")]
-            summary = item.get("paper_summary", {})
-            abstract = summary.get("abstract", "") if isinstance(summary, dict) else ""
-            visits = item.get("visits_count", {})
-            visit_count = visits.get("all", 0) if isinstance(visits, dict) else 0
+        prev_pos = pid_matches[i - 1].start() if i > 0 else 0
+        next_pos = pid_matches[i + 1].start() if i + 1 < len(pid_matches) else len(html)
 
-            try:
-                pub_str = item.get("publication_date", "")
-                pub_date = datetime.fromisoformat(pub_str.replace("Z", "+00:00")).date()
-            except (ValueError, AttributeError):
-                pub_date = date.today()
+        before = html[prev_pos:pos]
+        after = html[pos:next_pos]
 
-            topics = [t for t in item.get("topics", []) if t.startswith("cs.")]
+        title_matches = list(_TITLE_RE.finditer(before))
+        title = _unescape_js_string(title_matches[-1].group(1)) if title_matches else ""
 
-            papers.append(
-                Paper(
-                    arxiv_id=paper_id,
-                    title=item.get("title", ""),
-                    authors=authors,
-                    abstract=abstract,
-                    source="alphaxiv",
-                    url=f"https://arxiv.org/abs/{paper_id}",
-                    published=pub_date,
-                    categories=topics,
-                    alphaxiv_votes=item.get("total_votes"),
-                    alphaxiv_visits=visit_count,
-                )
+        abstract_matches = list(_ABSTRACT_RE.finditer(before))
+        abstract = _unescape_js_string(abstract_matches[-1].group(1)) if abstract_matches else ""
+
+        visits_m = _VISITS_RE.search(after[:500])
+        votes_m = _VOTES_RE.search(after[:500])
+        pub_m = _PUB_DATE_RE.search(after[:1000])
+
+        topics: list[str] = []
+        topics_m = _TOPICS_RE.search(after[:2000])
+        if topics_m:
+            topics = [t.strip('"') for t in topics_m.group(1).split(",") if t.strip('"').startswith("cs.")]
+
+        authors: list[str] = []
+        authors_m = _AUTHORS_RE.search(after[:3000])
+        if authors_m:
+            authors = re.findall(r'"([^"]+)"', authors_m.group(1))
+
+        pub_date = _parse_pub_date(pub_m.group(1)) if pub_m else date.today()
+
+        papers.append(
+            Paper(
+                arxiv_id=paper_id,
+                title=title,
+                authors=authors,
+                abstract=abstract,
+                source="alphaxiv",
+                url=f"https://arxiv.org/abs/{paper_id}",
+                published=pub_date,
+                categories=topics,
+                alphaxiv_votes=int(votes_m.group(1)) if votes_m else None,
+                alphaxiv_visits=int(visits_m.group(1)) if visits_m else None,
             )
+        )
 
     return papers
 
@@ -82,8 +108,7 @@ def parse_ssr_json(html: str) -> list[Paper]:
 def fetch_trending(max_pages: int = 3) -> list[Paper]:
     """Fetch trending papers from alphaXiv.
 
-    For MVP, fetches only the first page (~20 papers). Pagination requires
-    cursor extraction from SSR state which may change with frontend updates.
+    Fetches the explore page and extracts papers from SSR-embedded data.
     Raises AlphaXivError on failure (caller should handle fallback).
     """
     params = {"sort": "Hot", "categories": "computer-science"}
@@ -94,6 +119,6 @@ def fetch_trending(max_pages: int = 3) -> list[Paper]:
     except requests.RequestException as e:
         raise AlphaXivError(f"Failed to fetch alphaXiv: {e}") from e
 
-    papers = parse_ssr_json(resp.text)
+    papers = parse_ssr_html(resp.text)
     logger.info("Fetched %d papers from alphaXiv", len(papers))
     return papers
