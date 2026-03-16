@@ -54,12 +54,11 @@ python start-my-day/scripts/search_and_filter.py --config config.example.yaml --
 
 ## Testing
 
-- **75 tests** covering lib/ (unit) and entry scripts (integration)
-- Target: 80%+ coverage (currently 96%)
+- **86 tests** covering lib/ (unit) and entry scripts (integration)
+- Target: 80%+ coverage (currently 95%)
 - CI: GitHub Actions runs on push/PR for Python 3.12 and 3.13
 
 ## Spec and Plan
 
 - Design spec: `docs/superpowers/specs/2026-03-16-auto-reading-v2-design.md`
 - Implementation plan: `docs/superpowers/plans/2026-03-16-auto-reading-v2-implementation.md`
-- Reference code: `reference/evil-read-arxiv/` (arXiv XML parsing, vault scanning patterns)

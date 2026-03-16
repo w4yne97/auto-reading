@@ -1,9 +1,62 @@
 """Tests for vault operations."""
 
 import textwrap
+from datetime import date
 from pathlib import Path
 
-from lib.vault import parse_frontmatter, scan_papers, build_dedup_set, generate_wikilinks, write_note
+import pytest
+
+from lib.vault import load_config, parse_date_field, parse_frontmatter, scan_papers, build_dedup_set, generate_wikilinks, write_note
+
+
+class TestLoadConfig:
+    def test_valid_config(self, tmp_path: Path):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("research_domains:\n  test:\n    keywords: [hello]\n")
+        result = load_config(cfg)
+        assert result["research_domains"]["test"]["keywords"] == ["hello"]
+
+    def test_file_not_found(self, tmp_path: Path):
+        with pytest.raises(SystemExit):
+            load_config(tmp_path / "nonexistent.yaml")
+
+    def test_malformed_yaml(self, tmp_path: Path):
+        cfg = tmp_path / "bad.yaml"
+        cfg.write_text("research_domains:\n  - [unclosed\n")
+        with pytest.raises(SystemExit):
+            load_config(cfg)
+
+    def test_empty_file(self, tmp_path: Path):
+        cfg = tmp_path / "empty.yaml"
+        cfg.write_text("")
+        with pytest.raises(SystemExit):
+            load_config(cfg)
+
+    def test_non_dict_yaml(self, tmp_path: Path):
+        cfg = tmp_path / "list.yaml"
+        cfg.write_text("- item1\n- item2\n")
+        with pytest.raises(SystemExit):
+            load_config(cfg)
+
+
+class TestParseDateField:
+    def test_date_object(self):
+        assert parse_date_field(date(2026, 3, 16)) == date(2026, 3, 16)
+
+    def test_iso_string(self):
+        assert parse_date_field("2026-03-16") == date(2026, 3, 16)
+
+    def test_quoted_string_with_time(self):
+        assert parse_date_field("2026-03-16T10:00:00") == date(2026, 3, 16)
+
+    def test_invalid_string(self):
+        assert parse_date_field("not-a-date") is None
+
+    def test_none_value(self):
+        assert parse_date_field(None) is None
+
+    def test_integer_value(self):
+        assert parse_date_field(20260316) is None
 
 
 class TestParseFrontmatter:

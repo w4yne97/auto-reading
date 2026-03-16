@@ -73,7 +73,7 @@ def parse_arxiv_xml(xml_text: str) -> list[Paper]:
     return papers
 
 
-def _request_with_retry(params: dict) -> str:
+def _request_with_retry(params: dict, *, retry_delay: float = _RETRY_DELAY) -> str:
     """Make a GET request to arXiv API with retry on 429/5xx."""
     last_status = 0
     for attempt in range(1, _MAX_RETRIES + 1):
@@ -85,8 +85,8 @@ def _request_with_retry(params: dict) -> str:
             "arXiv API returned %d (attempt %d/%d)",
             resp.status_code, attempt, _MAX_RETRIES,
         )
-        if attempt < _MAX_RETRIES:
-            time.sleep(_RETRY_DELAY)
+        if attempt < _MAX_RETRIES and retry_delay > 0:
+            time.sleep(retry_delay)
 
     raise RuntimeError(f"arXiv API failed after {_MAX_RETRIES} retries (last status: {last_status})")
 
@@ -96,6 +96,8 @@ def search_arxiv(
     categories: list[str],
     max_results: int = 50,
     days: int = 30,
+    *,
+    retry_delay: float = _RETRY_DELAY,
 ) -> list[Paper]:
     """Search arXiv by keywords and categories within a date range."""
     query_parts = []
@@ -116,7 +118,7 @@ def search_arxiv(
         "sortOrder": "descending",
     }
 
-    xml_text = _request_with_retry(params)
+    xml_text = _request_with_retry(params, retry_delay=retry_delay)
     papers = parse_arxiv_xml(xml_text)
 
     # Filter by date range
@@ -124,9 +126,9 @@ def search_arxiv(
     return [p for p in papers if p.published >= cutoff]
 
 
-def fetch_paper(arxiv_id: str) -> Paper | None:
+def fetch_paper(arxiv_id: str, *, retry_delay: float = _RETRY_DELAY) -> Paper | None:
     """Fetch a single paper by arXiv ID."""
     params = {"id_list": arxiv_id, "max_results": 1}
-    xml_text = _request_with_retry(params)
+    xml_text = _request_with_retry(params, retry_delay=retry_delay)
     papers = parse_arxiv_xml(xml_text)
     return papers[0] if papers else None

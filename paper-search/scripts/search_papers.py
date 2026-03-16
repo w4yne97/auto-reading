@@ -16,12 +16,10 @@ import logging
 import sys
 from pathlib import Path
 
-import yaml
-
 from lib.models import scored_paper_to_dict
 from lib.sources.arxiv_api import search_arxiv
 from lib.scoring import score_papers
-from lib.vault import scan_papers, build_dedup_set
+from lib.vault import load_config, scan_papers, build_dedup_set
 
 logger = logging.getLogger("search_papers")
 
@@ -45,8 +43,7 @@ def main() -> None:
         stream=sys.stderr,
     )
 
-    with open(args.config, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config = load_config(args.config)
 
     domains = config.get("research_domains", {})
     weights = config.get("scoring_weights", {})

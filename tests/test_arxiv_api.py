@@ -73,7 +73,7 @@ class TestSearchArxiv:
     def test_search_retries_on_503(self):
         responses.add(responses.GET, "https://export.arxiv.org/api/query", status=503)
         responses.add(responses.GET, "https://export.arxiv.org/api/query", body=SAMPLE_XML, status=200)
-        papers = search_arxiv(keywords=["test"], categories=[], max_results=5, days=7)
+        papers = search_arxiv(keywords=["test"], categories=[], max_results=5, days=7, retry_delay=0)
         assert len(papers) == 1
 
     @responses.activate
@@ -81,7 +81,7 @@ class TestSearchArxiv:
         for _ in range(3):
             responses.add(responses.GET, "https://export.arxiv.org/api/query", status=503)
         with pytest.raises(RuntimeError):
-            search_arxiv(keywords=["test"], categories=[], max_results=5, days=7)
+            search_arxiv(keywords=["test"], categories=[], max_results=5, days=7, retry_delay=0)
 
 
 class TestFetchPaper:

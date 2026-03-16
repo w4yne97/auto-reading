@@ -15,21 +15,9 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from lib.vault import parse_frontmatter
+from lib.vault import parse_date_field, parse_frontmatter
 
 logger = logging.getLogger("generate_digest")
-
-
-def _parse_date_field(value) -> date | None:
-    """Parse a date from frontmatter value (may be date object or string)."""
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        try:
-            return date.fromisoformat(value[:10])
-        except ValueError:
-            return None
-    return None
 
 
 def main() -> None:
@@ -61,7 +49,7 @@ def main() -> None:
             arxiv_id = fm.get("arxiv_id", "")
             if not arxiv_id or arxiv_id in seen_ids:
                 continue
-            fetched_date = _parse_date_field(fm.get("fetched"))
+            fetched_date = parse_date_field(fm.get("fetched"))
             if fetched_date and fetched_date >= cutoff:
                 seen_ids.add(arxiv_id)
                 papers.append(fm)
@@ -83,7 +71,7 @@ def main() -> None:
                 fm = parse_frontmatter(md_file.read_text(encoding="utf-8"))
             except OSError:
                 continue
-            updated_date = _parse_date_field(fm.get("updated"))
+            updated_date = parse_date_field(fm.get("updated"))
             if updated_date and updated_date >= cutoff:
                 insight_updates.append({
                     "title": fm.get("title", md_file.stem),

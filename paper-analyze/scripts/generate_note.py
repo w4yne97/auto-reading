@@ -15,10 +15,9 @@ import logging
 import sys
 from pathlib import Path
 
-import yaml
-
 from lib.sources.arxiv_api import fetch_paper
 from lib.scoring import best_domain
+from lib.vault import load_config
 
 logger = logging.getLogger("generate_note")
 
@@ -37,8 +36,7 @@ def main() -> None:
         stream=sys.stderr,
     )
 
-    with open(args.config, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config = load_config(args.config)
     domains = config.get("research_domains", {})
 
     paper = fetch_paper(args.arxiv_id)

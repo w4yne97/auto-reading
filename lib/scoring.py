@@ -113,16 +113,18 @@ def best_domain(paper: Paper, domains: dict) -> str:
 
 def matched_keywords(paper: Paper, domains: dict) -> list[str]:
     """Find all keywords that matched in title or abstract."""
-    matched = []
+    seen: set[str] = set()
+    result: list[str] = []
     title_lower = paper.title.lower()
     abstract_lower = paper.abstract.lower()
 
     for cfg in domains.values():
         for kw in cfg.get("keywords", []):
-            if kw.lower() in title_lower or kw.lower() in abstract_lower:
-                if kw not in matched:
-                    matched.append(kw)
-    return matched
+            kw_lower = kw.lower()
+            if kw_lower not in seen and (kw_lower in title_lower or kw_lower in abstract_lower):
+                seen.add(kw_lower)
+                result.append(kw)
+    return result
 
 
 def score_papers(

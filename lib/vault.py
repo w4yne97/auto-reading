@@ -2,6 +2,7 @@
 
 import logging
 import re
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -9,6 +10,53 @@ import yaml
 logger = logging.getLogger(__name__)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)^---\s*\n", re.MULTILINE | re.DOTALL)
+
+
+def load_config(config_path: str | Path) -> dict:
+    """Load and validate a research_interests.yaml config file.
+
+    Raises SystemExit(1) with user-friendly message on:
+    - File not found
+    - YAML syntax error
+    - Empty or non-dict config
+    """
+    path = Path(config_path)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        logger.error("Config file not found: %s — run /reading-config to initialize", path)
+        raise SystemExit(1)
+    except OSError as e:
+        logger.error("Cannot read config file %s: %s", path, e)
+        raise SystemExit(1)
+
+    try:
+        data = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        logger.error("Config YAML syntax error in %s: %s", path, e)
+        raise SystemExit(1)
+
+    if not isinstance(data, dict):
+        logger.error("Config file %s is empty or not a YAML mapping", path)
+        raise SystemExit(1)
+
+    return data
+
+
+def parse_date_field(value) -> date | None:
+    """Parse a date from frontmatter value.
+
+    Handles both Python date objects (from PyYAML auto-parsing)
+    and ISO date strings (from quoted YAML values).
+    """
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return None
+    return None
 
 
 def parse_frontmatter(content: str) -> dict:

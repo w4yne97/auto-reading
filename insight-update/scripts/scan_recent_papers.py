@@ -16,21 +16,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from lib.vault import parse_frontmatter
+from lib.vault import parse_date_field, parse_frontmatter
 
 logger = logging.getLogger("scan_recent_papers")
-
-
-def _parse_date_field(value) -> date | None:
-    """Parse a date from frontmatter value (may be date object or string)."""
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        try:
-            return date.fromisoformat(value[:10])
-        except ValueError:
-            return None
-    return None
 
 
 def main() -> None:
@@ -61,7 +49,7 @@ def main() -> None:
             fm = parse_frontmatter(content)
             if not fm.get("arxiv_id"):
                 continue
-            fetched_date = _parse_date_field(fm.get("fetched"))
+            fetched_date = parse_date_field(fm.get("fetched"))
             if fetched_date and fetched_date >= since_date:
                 recent.append({
                     "arxiv_id": fm.get("arxiv_id"),
