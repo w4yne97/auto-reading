@@ -52,7 +52,7 @@
 - Create: `config.yaml`
 - Create: `.gitignore`
 
-- [ ] **Step 1: Initialize uv project**
+- [x] **Step 1: Initialize uv project**
 
 Run:
 ```bash
@@ -60,7 +60,7 @@ cd /Users/w4ynewang/Documents/code/auto-reading
 uv init --lib --name auto-reading
 ```
 
-- [ ] **Step 2: Replace pyproject.toml with full config**
+- [x] **Step 2: Replace pyproject.toml with full config**
 
 ```toml
 [project]
@@ -94,7 +94,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
-- [ ] **Step 3: Write __init__.py**
+- [x] **Step 3: Write __init__.py**
 
 ```python
 """Auto-Reading: LLM-driven paper tracking system."""
@@ -102,7 +102,7 @@ build-backend = "hatchling.build"
 __version__ = "0.1.0"
 ```
 
-- [ ] **Step 4: Write default config.yaml**
+- [x] **Step 4: Write default config.yaml**
 
 ```yaml
 obsidian:
@@ -137,7 +137,7 @@ fetch:
   max_papers_per_run: 50
 ```
 
-- [ ] **Step 5: Write .gitignore**
+- [x] **Step 5: Write .gitignore**
 
 ```
 __pycache__/
@@ -150,14 +150,14 @@ auto-reading.db
 .env
 ```
 
-- [ ] **Step 6: Install dependencies**
+- [x] **Step 6: Install dependencies**
 
 Run:
 ```bash
 uv sync
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add pyproject.toml src/auto_reading/__init__.py config.yaml .gitignore uv.lock .python-version
@@ -173,7 +173,7 @@ git commit -m "chore: scaffold project with uv, dependencies, and default config
 - Create: `tests/test_models.py`
 - Create: `tests/conftest.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/conftest.py`:
 ```python
@@ -262,12 +262,12 @@ def test_paper_replace_returns_new_instance(sample_paper: Paper):
     assert sample_paper.summary is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_models.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'auto_reading.models'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/auto_reading/models.py`:
 ```python
@@ -297,12 +297,12 @@ class Paper:
     relevance_score: float
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_models.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto_reading/models.py tests/conftest.py tests/test_models.py
@@ -317,7 +317,7 @@ git commit -m "feat: add Paper frozen dataclass with tests"
 - Create: `src/auto_reading/config.py`
 - Create: `tests/test_config.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_config.py`:
 ```python
@@ -414,12 +414,12 @@ def test_config_file_not_found():
         load_config(Path("/nonexistent/config.yaml"))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_config.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/auto_reading/config.py`:
 ```python
@@ -515,12 +515,12 @@ def load_config(path: Path) -> AppConfig:
     return AppConfig(**raw)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_config.py -v`
 Expected: 7 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto_reading/config.py tests/test_config.py
@@ -535,7 +535,7 @@ git commit -m "feat: add config loading with Pydantic validation"
 - Create: `src/auto_reading/db.py`
 - Create: `tests/test_db.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_db.py`:
 ```python
@@ -658,12 +658,12 @@ def test_list_by_category(db: PaperDB, sample_paper: Paper):
     assert results[0].id == sample_paper.id
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_db.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/auto_reading/db.py`:
 ```python
@@ -834,12 +834,12 @@ class PaperDB:
         self._conn.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_db.py -v`
 Expected: 9 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto_reading/db.py tests/test_db.py
@@ -856,7 +856,7 @@ git commit -m "feat: add SQLite database layer with CRUD and dedup"
 - Create: `src/auto_reading/fetchers/__init__.py`
 - Create: `src/auto_reading/fetchers/base.py`
 
-- [ ] **Step 1: Write the base fetcher**
+- [x] **Step 1: Write the base fetcher**
 
 `src/auto_reading/fetchers/base.py`:
 ```python
@@ -898,7 +898,7 @@ from auto_reading.fetchers.base import BaseFetcher
 __all__ = ["BaseFetcher"]
 ```
 
-- [ ] **Step 1b: Write a quick test for BaseFetcher abstractness**
+- [x] **Step 1b: Write a quick test for BaseFetcher abstractness**
 
 Add to `tests/test_fetchers.py`:
 ```python
@@ -911,7 +911,7 @@ def test_base_fetcher_cannot_be_instantiated():
         BaseFetcher()
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add src/auto_reading/fetchers/
@@ -926,7 +926,7 @@ git commit -m "feat: add BaseFetcher abstract interface"
 - Create: `src/auto_reading/fetchers/alphaarxiv.py`
 - Create: `tests/test_fetchers.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_fetchers.py`:
 ```python
@@ -1005,12 +1005,12 @@ async def test_alphaarxiv_fetch_handles_malformed_html():
     assert papers == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_fetchers.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Note: The actual AlphaRxiv HTML structure must be discovered at implementation time. The fetcher below uses CSS selectors that should be adjusted to match the real site. The test HTML above is a reasonable placeholder. At implementation time, the developer should:
 1. Visit `https://alphaarxiv.org/` and inspect the actual HTML structure
@@ -1105,12 +1105,12 @@ class AlphaRxivFetcher(BaseFetcher):
         )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_fetchers.py -v`
 Expected: 4 passed (3 AlphaRxiv + 1 BaseFetcher abstraction test)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto_reading/fetchers/alphaarxiv.py tests/test_fetchers.py
@@ -1125,7 +1125,7 @@ git commit -m "feat: add AlphaRxiv fetcher with HTML scraping"
 - Create: `src/auto_reading/fetchers/github.py`
 - Modify: `tests/test_fetchers.py` (append new tests)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_fetchers.py`:
 ```python
@@ -1183,12 +1183,12 @@ async def test_github_fetch_no_tracked_repos():
     assert papers == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_fetchers.py::test_github_fetch_releases -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/auto_reading/fetchers/github.py`:
 ```python
@@ -1297,12 +1297,12 @@ class GitHubFetcher(BaseFetcher):
         return papers
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_fetchers.py -v`
 Expected: 7 passed (4 prior + 3 GitHub tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto_reading/fetchers/github.py tests/test_fetchers.py
@@ -1319,7 +1319,7 @@ git commit -m "feat: add GitHub fetcher for tracked repo releases"
 - Create: `src/auto_reading/analyzer.py`
 - Create: `tests/test_analyzer.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_analyzer.py`:
 ```python
@@ -1447,12 +1447,12 @@ def test_analyze_raises_after_max_retries(sample_paper):
     assert mock_client.messages.create.call_count == 3
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_analyzer.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/auto_reading/analyzer.py`:
 ```python
@@ -1585,12 +1585,12 @@ class Analyzer:
         )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_analyzer.py -v`
 Expected: 6 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auto_reading/analyzer.py tests/test_analyzer.py
@@ -1607,7 +1607,7 @@ git commit -m "feat: add Claude-based paper analyzer with structured prompts"
 - Create: `src/auto_reading/templates/weekly_digest.md`
 - Create: `tests/test_writer.py`
 
-- [ ] **Step 1: Write the Jinja2 templates**
+- [x] **Step 1: Write the Jinja2 templates**
 
 `src/auto_reading/templates/paper_note.md`:
 ```
@@ -1653,7 +1653,7 @@ paper_count: {{ papers | length }}
 {% endfor %}
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 `tests/test_writer.py`:
 ```python
@@ -1775,12 +1775,12 @@ def test_slug_generation(writer: ObsidianWriter):
     assert "!" not in slug
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_writer.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 4: Write minimal implementation**
+- [x] **Step 4: Write minimal implementation**
 
 `src/auto_reading/writer.py`:
 ```python
@@ -1904,12 +1904,12 @@ class ObsidianWriter:
         return slug
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_writer.py -v`
 Expected: 7 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto_reading/writer.py src/auto_reading/templates/ tests/test_writer.py
@@ -1926,7 +1926,7 @@ git commit -m "feat: add Obsidian writer with vault init, templates, and force-s
 - Create: `src/auto_reading/cli.py`
 - Create: `tests/test_cli.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_cli.py`:
 ```python
@@ -2042,12 +2042,12 @@ def test_cli_analyze_retry_errors(config_file, tmp_path):
     assert "1 analyzed" in result.output
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_cli.py -v`
 Expected: FAIL — `ImportError`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `src/auto_reading/cli.py`:
 ```python
@@ -2256,17 +2256,17 @@ def run(
     sync(force=False, config=config, verbose=verbose)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_cli.py -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Run full test suite**
+- [x] **Step 5: Run full test suite**
 
 Run: `uv run pytest -v`
 Expected: All tests pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/auto_reading/cli.py tests/test_cli.py
@@ -2277,7 +2277,7 @@ git commit -m "feat: add CLI with fetch, analyze, sync, and run commands"
 
 ### Task 11: Coverage Check & Final Verification
 
-- [ ] **Step 1: Run coverage**
+- [x] **Step 1: Run coverage**
 
 Run: `uv run pytest --cov=auto_reading --cov-report=term-missing -v`
 Expected: ≥80% coverage
