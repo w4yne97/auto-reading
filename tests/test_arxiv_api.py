@@ -6,7 +6,10 @@ from datetime import date
 import pytest
 import responses
 
-from lib.sources.arxiv_api import search_arxiv, fetch_paper, parse_arxiv_xml
+from lib.sources.arxiv_api import (
+    search_arxiv, fetch_paper, parse_arxiv_xml,
+    search_arxiv_by_title, fetch_papers_batch,
+)
 
 
 SAMPLE_XML = textwrap.dedent("""\
@@ -108,3 +111,86 @@ class TestFetchPaper:
         )
         paper = fetch_paper("9999.99999")
         assert paper is None
+
+
+MULTI_ENTRY_XML = textwrap.dedent("""\
+    <?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom"
+          xmlns:arxiv="http://arxiv.org/schemas/atom">
+      <entry>
+        <id>http://arxiv.org/abs/2406.12345v1</id>
+        <title>Paper A</title>
+        <summary>Abstract A.</summary>
+        <published>2026-03-10T00:00:00Z</published>
+        <author><name>Alice</name></author>
+        <category term="cs.AI"/>
+      </entry>
+      <entry>
+        <id>http://arxiv.org/abs/1706.03762v7</id>
+        <title>Paper B</title>
+        <summary>Abstract B.</summary>
+        <published>2017-06-12T00:00:00Z</published>
+        <author><name>Bob</name></author>
+        <category term="cs.CL"/>
+      </entry>
+    </feed>
+""")
+
+
+class TestSearchArxivByTitle:
+    @responses.activate
+    def test_search_returns_results(self):
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=SAMPLE_XML,
+            status=200,
+        )
+        papers = search_arxiv_by_title("Test Paper", retry_delay=0)
+        assert len(papers) == 1
+        assert papers[0].title == "Test Paper: A New Approach"
+
+    @responses.activate
+    def test_search_empty_result(self):
+        empty_xml = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=empty_xml,
+            status=200,
+        )
+        papers = search_arxiv_by_title("Nonexistent", retry_delay=0)
+        assert papers == []
+
+
+class TestFetchPapersBatch:
+    @responses.activate
+    def test_batch_multiple_papers(self):
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=MULTI_ENTRY_XML,
+            status=200,
+        )
+        result = fetch_papers_batch(["2406.12345", "1706.03762"], retry_delay=0)
+        assert result["2406.12345"] is not None
+        assert result["2406.12345"].title == "Paper A"
+        assert result["1706.03762"] is not None
+        assert result["1706.03762"].title == "Paper B"
+
+    @responses.activate
+    def test_batch_partial_not_found(self):
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=SAMPLE_XML,
+            status=200,
+        )
+        result = fetch_papers_batch(["2406.12345", "9999.99999"], retry_delay=0)
+        assert result["2406.12345"] is not None
+        assert result["9999.99999"] is None
+
+    @responses.activate
+    def test_batch_empty_list(self):
+        result = fetch_papers_batch([], retry_delay=0)
+        assert result == {}

@@ -132,3 +132,49 @@ def fetch_paper(arxiv_id: str, *, retry_delay: float = _RETRY_DELAY) -> Paper | 
     xml_text = _request_with_retry(params, retry_delay=retry_delay)
     papers = parse_arxiv_xml(xml_text)
     return papers[0] if papers else None
+
+
+def search_arxiv_by_title(
+    title: str,
+    max_results: int = 5,
+    *,
+    retry_delay: float = _RETRY_DELAY,
+) -> list[Paper]:
+    """Search arXiv by paper title. No date filtering (for backfill)."""
+    params = {
+        "search_query": f'ti:"{title}"',
+        "start": 0,
+        "max_results": max_results,
+        "sortBy": "relevance",
+        "sortOrder": "descending",
+    }
+    xml_text = _request_with_retry(params, retry_delay=retry_delay)
+    return parse_arxiv_xml(xml_text)
+
+
+_BATCH_CHUNK_SIZE = 50
+
+
+def fetch_papers_batch(
+    arxiv_ids: list[str],
+    *,
+    retry_delay: float = _RETRY_DELAY,
+) -> dict[str, Paper | None]:
+    """Fetch metadata for multiple papers in batched requests.
+
+    Returns a dict mapping each arxiv_id to its Paper or None if not found.
+    """
+    result: dict[str, Paper | None] = {aid: None for aid in arxiv_ids}
+
+    for i in range(0, len(arxiv_ids), _BATCH_CHUNK_SIZE):
+        chunk = arxiv_ids[i : i + _BATCH_CHUNK_SIZE]
+        params = {"id_list": ",".join(chunk), "max_results": len(chunk)}
+        xml_text = _request_with_retry(params, retry_delay=retry_delay)
+        papers = parse_arxiv_xml(xml_text)
+        for paper in papers:
+            result[paper.arxiv_id] = paper
+
+        if i + _BATCH_CHUNK_SIZE < len(arxiv_ids) and retry_delay > 0:
+            time.sleep(retry_delay)
+
+    return result
