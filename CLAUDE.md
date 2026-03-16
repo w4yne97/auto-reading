@@ -42,7 +42,7 @@ python start-my-day/scripts/search_and_filter.py --config config.example.yaml --
 
 ## Key Design Decisions
 
-- **alphaXiv primary source**: SSR JSON extracted via `json.JSONDecoder.raw_decode()` (not regex) from `alphaxiv.org/explore`. Falls back to arXiv API when unavailable.
+- **alphaXiv primary source**: Papers extracted via regex from TanStack Router SSR-embedded data in `alphaxiv.org/explore`. Falls back to arXiv API when unavailable.
 - **Two-phase scoring**: Rule scoring (free, all papers) filters to Top 20, then Claude AI scores those 20 in-context. Final = rule * 0.6 + ai * 0.4.
 - **Immutable data models**: `Paper` and `ScoredPaper` are frozen dataclasses. Never mutate — create new instances.
 - **Vault as storage**: No database. Deduplication by scanning `20_Papers/` frontmatter `arxiv_id` fields. Tolerates missing/renamed fields from older notes.
@@ -54,8 +54,8 @@ python start-my-day/scripts/search_and_filter.py --config config.example.yaml --
 
 ## Testing
 
-- **86 tests** covering lib/ (unit) and entry scripts (integration)
-- Target: 80%+ coverage (currently 95%)
+- **88 tests** covering lib/ (unit) and entry scripts (integration)
+- Target: 80%+ coverage (currently 96%)
 - CI: GitHub Actions runs on push/PR for Python 3.12 and 3.13
 
 ## Spec and Plan
