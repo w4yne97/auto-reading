@@ -52,6 +52,12 @@ python start-my-day/scripts/search_and_filter.py --config config.example.yaml --
 
 `keyword_match: 0.4, recency: 0.2, popularity: 0.3, category_match: 0.1`
 
+## Testing
+
+- **75 tests** covering lib/ (unit) and entry scripts (integration)
+- Target: 80%+ coverage (currently 96%)
+- CI: GitHub Actions runs on push/PR for Python 3.12 and 3.13
+
 ## Spec and Plan
 
 - Design spec: `docs/superpowers/specs/2026-03-16-auto-reading-v2-design.md`
