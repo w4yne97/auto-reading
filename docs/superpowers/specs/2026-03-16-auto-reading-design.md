@@ -61,24 +61,56 @@ Two entry points sharing one set of core logic:
 
 ## Data Model
 
-### Paper (SQLite)
+### Paper (Application Model)
 
 ```python
-Paper:
-  id: str                  # arXiv ID or unique hash
-  title: str
-  authors: list[str]
-  abstract: str
-  source: str              # "alphaarxiv" | "github" | ...
-  source_url: str
-  published_at: date
-  fetched_at: datetime
-  tags: list[str]          # ["coding-agent", "code-generation", ...]
-  category: str            # primary category (folder name)
-  status: str              # "unread" | "reading" | "read" | "archived"
-  summary: str | None      # Claude-generated summary
-  insights: list[str]      # Claude-extracted insights
-  relevance_score: float   # 0-1, Claude-assessed relevance
+@dataclass(frozen=True)
+class Paper:
+    id: str                  # Source-prefixed ID (see Data Sources for format)
+    title: str
+    authors: list[str]
+    abstract: str
+    source: str              # "alphaarxiv" | "github"
+    source_url: str
+    published_at: date
+    fetched_at: datetime
+    tags: list[str]          # Claude-assigned, free-form but guided by config
+    category: str            # Must be one of config.yaml categories
+    status: str              # "unread" | "reading" | "read" | "archived"
+    summary: str | None      # Claude-generated summary
+    insights: list[str]      # Claude-extracted insights
+    relevance_score: float   # 0-1, Claude-assessed relevance
+```
+
+### SQLite Schema
+
+```sql
+CREATE TABLE papers (
+    id TEXT PRIMARY KEY,           -- e.g. "arxiv:2406.12345"
+    title TEXT NOT NULL,
+    authors TEXT NOT NULL,         -- JSON array: '["Author1", "Author2"]'
+    abstract TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    published_at TEXT NOT NULL,    -- ISO date
+    fetched_at TEXT NOT NULL,      -- ISO datetime
+    tags TEXT NOT NULL DEFAULT '[]',       -- JSON array
+    category TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'unread',
+    summary TEXT,
+    insights TEXT NOT NULL DEFAULT '[]',   -- JSON array
+    relevance_score REAL
+);
+
+CREATE INDEX idx_papers_source ON papers(source);
+CREATE INDEX idx_papers_category ON papers(category);
+CREATE INDEX idx_papers_status ON papers(status);
+CREATE INDEX idx_papers_published ON papers(published_at);
+```
+
+List fields (`authors`, `tags`, `insights`) are stored as JSON arrays. SQLite's `json_each()` function enables queries like:
+```sql
+SELECT * FROM papers, json_each(papers.tags) WHERE json_each.value = 'coding-agent';
 ```
 
 ### Obsidian Vault Structure
@@ -121,7 +153,7 @@ source: alphaarxiv
 url: https://arxiv.org/abs/xxxx
 date: 2026-03-16
 tags: [coding-agent, llm]
-category: core
+category: coding-agent
 relevance: 0.92
 status: unread
 ---
@@ -140,14 +172,33 @@ status: unread
 ## Data Sources (MVP)
 
 ### AlphaRxiv
-- API-based fetching of trending/latest papers
-- Filter by topic keywords (coding agent, code generation, etc.)
-- Deduplication by arXiv ID
+
+AlphaRxiv is a community-driven platform that surfaces trending arXiv papers. Integration approach:
+
+- **Method**: Web scraping via httpx + HTML parsing (no official public API)
+- **Target**: Trending/latest papers filtered by topic keywords
+- **Fragility note**: As a scraping-based source, HTML structure changes may break the fetcher. The fetcher should be defensively coded with clear error messages on parse failures.
+- **Fallback**: If AlphaRxiv proves unreliable, the arXiv API (`export.arxiv.org/api/query`) can serve as a direct replacement with keyword-based search
+- **Rate limiting**: Respect `robots.txt`, add 1-2s delay between requests
+- **Deduplication**: By arXiv ID (e.g., `2406.12345`)
+- **ID format**: `arxiv:{arxiv_id}` (e.g., `arxiv:2406.12345`)
 
 ### GitHub
-- Trending repositories in relevant topics
-- Release notes from key projects (e.g., aider, cursor, continue, etc.)
-- Deduplication by repo URL + version
+
+Two distinct sub-sources, both producing entries in the unified Paper model:
+
+- **Trending repos**: Via unofficial GitHub trending endpoint or scraping `github.com/trending`. Captures emerging coding agent projects.
+- **Release notes**: Via GitHub Releases API (`GET /repos/{owner}/{repo}/releases`). Tracks updates from key projects (e.g., aider, cursor, continue, opendevin, swe-agent).
+- **Authentication**: GitHub personal access token (optional but recommended for rate limits)
+- **Rate limiting**: 60 req/hr unauthenticated, 5000 req/hr with token
+- **Deduplication**: By repo URL + release tag
+- **ID format**: `github:{owner}/{repo}` for trending, `github:{owner}/{repo}:{tag}` for releases
+- **Field mapping to Paper model**:
+  - `title` → repo name or release title
+  - `authors` → repo owner / contributors
+  - `abstract` → repo description or release body (truncated)
+  - `published_at` → repo creation date or release date
+  - `source_url` → repo URL or release URL
 
 ## Core Flow
 
@@ -164,10 +215,71 @@ GitHub API         (SQLite)     · Summary          · Category subfolder
 
 ### Key Design Decisions
 
-1. **Deduplication**: Based on arXiv ID or URL hash; no duplicate fetching
-2. **Classification by Claude**: Given a configurable category list, Claude selects primary category + multiple tags from abstract
-3. **Configurable categories**: Stored in `config.yaml`, user can add/remove at any time
+1. **Deduplication**: Based on source-prefixed ID (see Data Sources); no duplicate fetching
+2. **Classification by Claude**: Given a configurable category list, Claude selects primary category (must be from config list) + free-form tags (guided by topic context). Tags are descriptive labels Claude generates based on the content — no predefined tag vocabulary, but Claude is instructed to be consistent and reuse existing tags when applicable.
+3. **Configurable categories**: Stored in `config.yaml`, user can add/remove at any time. If Claude cannot map a paper to any configured category, it assigns `"other"`.
 4. **Incremental processing**: Only analyze newly fetched, unprocessed papers
+5. **Abstract-only analysis (Phase 1)**: Claude works from title + abstract only. Full-text PDF processing is a potential Phase 3 enhancement requiring PDF extraction and chunking, which is out of scope for MVP.
+
+## Analyzer: Prompt Design
+
+Claude receives a single structured prompt per paper that produces all analysis outputs in one API call.
+
+**Input**: Title + abstract + configured category list
+**Output**: JSON with summary, category, tags, relevance_score, insights
+
+```
+System: You are a research paper analyst specializing in AI/ML.
+Given a paper's title and abstract, produce a JSON analysis.
+
+User:
+## Paper
+Title: {title}
+Abstract: {abstract}
+
+## Available Categories
+{categories from config.yaml}
+
+## Instructions
+Analyze this paper and return JSON:
+{
+  "summary": "2-3 paragraph summary of key contributions and methods",
+  "category": "one of the available categories, or 'other'",
+  "tags": ["3-5 descriptive tags, reuse existing tags when applicable"],
+  "relevance_score": 0.0-1.0,
+  "insights": ["2-3 key takeaways or novel ideas"]
+}
+
+Relevance scoring guide:
+- 0.8-1.0: Directly about coding agents, code generation with LLMs
+- 0.5-0.8: Related (general LLM agents, tool use, code understanding)
+- 0.2-0.5: Tangentially related (general NLP, ML infrastructure)
+- 0.0-0.2: Minimal relevance to coding agents
+```
+
+**Cost estimation**: ~2K input tokens + ~1K output tokens per paper ≈ $0.01/paper (Sonnet). A batch of 50 papers ≈ $0.50. The `--limit` flag on CLI commands caps papers per run.
+
+## Error Handling
+
+- **Fetcher errors**: Log warning, skip the failing source, continue with others. Failed fetches do not write partial data to DB.
+- **Claude API errors**: Retry up to 3 times with exponential backoff (1s, 4s, 16s). On persistent failure, mark paper as `status: "error"` in DB for later retry via `auto-reading analyze --retry-errors`.
+- **Rate limits**: Respect source-specific rate limits. Claude API 429s trigger automatic backoff.
+- **Sync errors**: If a Markdown file cannot be written (permission, disk full), log error and continue with remaining papers. Never leave a partially written file.
+- **Partial batch failure**: Each paper is processed independently. One failure does not abort the batch.
+
+## Sync Behavior
+
+- **New paper** (no existing file): Create new Markdown file in the appropriate category subfolder
+- **Existing paper** (file already exists): **Skip by default**. The `--force` flag overwrites generated sections (Summary, Key Insights) while preserving the "My Notes" section. This protects user-written content.
+- **Deleted from DB**: No action. Orphaned Obsidian notes are left in place — the user may have added valuable notes.
+- **Category changed**: On `--force` sync, the file is moved to the new category subfolder.
+
+## Vault Initialization
+
+On first `sync` run, the system automatically creates the vault directory structure if it doesn't exist:
+- Creates `papers/`, `digests/`, `insights/`, `sources/` directories
+- Creates category subdirectories under `papers/` based on `config.yaml`
+- Does NOT create an Obsidian `.obsidian/` config folder — the user initializes Obsidian separately by opening the vault directory in the app
 
 ## CLI Interface (Phase 1)
 
@@ -209,6 +321,9 @@ auto-reading/
 │           ├── paper_note.md   # Jinja2 template
 │           └── weekly_digest.md
 ├── tests/
+│   ├── test_config.py
+│   ├── test_models.py
+│   ├── test_db.py
 │   ├── test_fetchers.py
 │   ├── test_analyzer.py
 │   └── test_writer.py
@@ -227,7 +342,7 @@ auto-reading/
 | Database | **SQLite** (built-in) | Zero dependency, sufficient for local storage |
 | LLM | **anthropic SDK** | Direct Claude API calls |
 | Templating | **Jinja2** | Flexible Markdown generation |
-| Config | **PyYAML** | config.yaml parsing |
+| Config | **PyYAML + Pydantic** | config.yaml parsing + validation |
 | Testing | **pytest** | Python standard |
 
 ## Evolution Roadmap
@@ -257,16 +372,27 @@ Each phase is independently usable — Phase 1 alone solves the manual tracking 
 
 ## Configuration (config.yaml)
 
+Configuration is validated at startup using **Pydantic**. Missing required fields cause a clear error message. Optional fields have sensible defaults.
+
 ```yaml
+# Required
+obsidian:
+  vault_path: ~/auto-reading-vault    # Required, no default
+
+# Optional with defaults
 sources:
   alphaarxiv:
-    enabled: true
+    enabled: true                      # default: true
     topics: ["coding agent", "code generation", "llm agent"]
   github:
-    enabled: true
+    enabled: true                      # default: true
     topics: ["coding-agent", "ai-coding"]
+    tracked_repos:                     # repos to watch for releases
+      - "paul-gauthier/aider"
+      - "OpenDevin/OpenDevin"
+      - "princeton-nlp/SWE-agent"
 
-categories:
+categories:                            # default: list below
   - coding-agent
   - llm-reasoning
   - code-generation
@@ -274,10 +400,28 @@ categories:
   - evaluation
   - infrastructure
 
-obsidian:
-  vault_path: ~/auto-reading-vault
-
 claude:
-  model: claude-sonnet-4-6
-  max_tokens: 4096
+  model: claude-sonnet-4-6            # default: claude-sonnet-4-6
+  max_tokens: 4096                     # default: 4096
+
+fetch:
+  default_days: 7                      # default lookback window
+  max_papers_per_run: 50               # cost safety cap
+```
+
+### Config Validation Rules
+
+- `obsidian.vault_path`: Required. Must be a valid writable path (expanded from `~`).
+- `categories`: At least one category must be defined.
+- `claude.model`: Must be a valid Anthropic model ID.
+- `fetch.max_papers_per_run`: Must be > 0. Caps Claude API costs per invocation.
+
+## Logging
+
+All modules log to stderr via Python `logging` at INFO level by default. `--verbose` flag switches to DEBUG. Log format:
+
+```
+2026-03-16 10:30:00 [INFO] fetcher.alphaarxiv: Fetched 23 papers for topic "coding agent"
+2026-03-16 10:30:01 [INFO] db: 5 new papers, 18 duplicates skipped
+2026-03-16 10:30:05 [WARN] analyzer: Claude API rate limited, retrying in 4s (attempt 2/3)
 ```
