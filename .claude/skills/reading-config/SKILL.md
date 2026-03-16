@@ -1,5 +1,5 @@
 ---
-name: config
+name: reading-config
 description: 对话式管理研究兴趣配置 — 初始化 vault、查看和修改配置
 ---
 
