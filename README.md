@@ -1,24 +1,26 @@
 # Auto-Reading
 
-基于 [Claude Code](https://claude.ai/code) Skills 的论文追踪与 Insight 知识管理系统。
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) Skills-powered research paper tracking and insight knowledge management system.
 
-从 [alphaXiv](https://alphaxiv.org) 和 arXiv 自动获取论文，通过规则 + AI 混合评分筛选推荐，生成结构化笔记存入 Obsidian vault，并构建**主题 → 技术点**的持续演化知识体系。
+Discover papers from [alphaXiv](https://alphaxiv.org) and arXiv, score them with rule + AI hybrid ranking, generate structured notes in your Obsidian vault, and build an evolving **topic -> sub-topic** insight knowledge graph across papers.
 
-## 特性
+## How It Works
 
-- **智能论文发现** — alphaXiv 社区热度优先，arXiv API 关键词补充
-- **两阶段评分** — 规则评分（零成本筛 200+ 篇）→ Claude AI 精评估（Top 20）
-- **Insight 知识图谱** — 跨论文追踪技术演进、方法对比、矛盾点
-- **Obsidian 原生** — Markdown + frontmatter + wikilink，无数据库
-- **对话式配置** — 通过 Claude Code 交互管理研究兴趣
+All interaction happens through Claude Code slash commands. There is no standalone CLI — Claude reads SKILL.md files and orchestrates Python scripts behind the scenes.
 
-## 前置要求
+```
+You ──► /start-my-day ──► Claude fetches & scores papers ──► Daily note in vault
+You ──► /paper-import ──► Claude resolves & imports papers ──► Paper notes + insight linking
+You ──► /insight-init ──► Claude builds knowledge topic ──► Evolving insight graph
+```
 
-- [Claude Code](https://claude.ai/code)
+## Prerequisites
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - Python 3.12+
-- [Obsidian](https://obsidian.md)（用于浏览生成的笔记）
+- [Obsidian](https://obsidian.md) (for browsing generated notes)
 
-## 安装
+## Install
 
 ```bash
 git clone https://github.com/w4yne97/auto-reading.git
@@ -27,127 +29,151 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
-## 快速开始
-
-在项目目录下打开 Claude Code：
+## Quick Start
 
 ```bash
-cd auto-reading
-claude
+cd auto-reading && claude
 ```
 
-### 1. 初始化配置
+### 1. Initialize
 
 ```
 /reading-config
 ```
 
-Claude 会引导你设置 vault 路径、研究领域、关键词和评分权重。
+Claude walks you through setting up your vault path, research domains, keywords, and scoring weights.
 
-### 2. 获取今日论文推荐
+### 2. Daily Papers
 
 ```
 /start-my-day
 ```
 
-自动搜索 → 评分 → 生成每日推荐笔记到 `10_Daily/YYYY-MM-DD-论文推荐.md`。
+Fetches trending papers from alphaXiv + arXiv, scores them (rule + AI), and generates a daily recommendation note.
 
-### 3. 搜索特定主题
-
-```
-/paper-search reinforcement learning for code
-```
-
-### 4. 深度分析单篇论文
+### 3. Import Existing Papers
 
 ```
-/paper-analyze 2406.12345
+/paper-import 2406.12345 "https://arxiv.org/abs/1706.03762" "Attention Is All You Need" /path/to/paper.pdf
 ```
 
-## 全部命令
+Batch import papers you've already read. Accepts arxiv IDs, URLs, titles, or PDFs. After import, choose to link them to insight topics.
 
-| 命令 | 说明 |
-|------|------|
-| `/start-my-day [日期]` | 每日论文推荐（alphaXiv + arXiv → 评分 → Top 10） |
-| `/paper-search <关键词>` | 按关键词搜索 arXiv 论文 |
-| `/paper-analyze <论文ID>` | 单篇论文深度分析，生成笔记 |
-| `/weekly-digest` | 过去 7 天的周报总结 |
-| `/insight-init <主题>` | 创建 Insight 知识主题（如 "RL for Coding Agent"） |
-| `/insight-update <主题>` | 将新论文知识融合到已有主题 |
-| `/insight-absorb <主题/技术点> <来源>` | 从特定论文吸收知识到指定技术点 |
-| `/insight-review <主题>` | 回顾主题的当前状态和开放问题 |
-| `/insight-connect <主题A> [主题B]` | 发现跨主题关联 |
-| `/reading-config` | 查看和修改研究兴趣配置 |
+### 4. Build Knowledge
 
-## Vault 结构
+```
+/insight-init RL for Coding Agent
+```
+
+Create a knowledge topic, then grow it over time with `/insight-update`, `/insight-absorb`, and `/insight-connect`.
+
+## Commands
+
+### Paper Discovery
+
+| Command | Description |
+|---------|-------------|
+| `/start-my-day [date]` | Daily recommendations (alphaXiv + arXiv -> score -> Top 10) |
+| `/paper-search <keywords>` | Search arXiv by keywords |
+| `/paper-analyze <arxiv_id>` | Deep analysis of a single paper |
+| `/paper-import <items...>` | Batch import existing papers (IDs, URLs, titles, PDFs) |
+| `/weekly-digest` | Weekly summary of the past 7 days |
+
+### Insight Knowledge Graph
+
+| Command | Description |
+|---------|-------------|
+| `/insight-init <topic>` | Create a new knowledge topic with sub-topics |
+| `/insight-update <topic>` | Merge recent papers into a topic |
+| `/insight-absorb <topic/sub-topic> <source>` | Deep-absorb a paper into a sub-topic |
+| `/insight-review <topic>` | Review current state and open questions |
+| `/insight-connect <topicA> [topicB]` | Discover cross-topic connections |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `/reading-config` | View and modify research interest config |
+
+## Vault Structure
 
 ```
 obsidian-vault/
 ├── 00_Config/
-│   └── research_interests.yaml    # 研究兴趣配置
+│   └── research_interests.yaml     # Research domains, keywords, weights
 ├── 10_Daily/
-│   └── 2026-03-16-论文推荐.md     # 每日推荐
+│   └── 2026-03-17-论文推荐.md      # Daily recommendation
 ├── 20_Papers/
-│   ├── coding-agent/              # 按研究领域分类
+│   ├── coding-agent/               # Papers organized by domain
+│   │   └── Paper-Title.md
 │   └── rl-for-code/
 ├── 30_Insights/
-│   └── RL-for-Coding-Agent/       # Insight 主题
-│       ├── _index.md              #   主题总览
-│       ├── 算法选择-GRPO-GSPO.md   #   技术点
-│       └── RL数据管道构建.md       #   技术点
+│   └── RL-for-Coding-Agent/        # Insight knowledge topics
+│       ├── _index.md               #   Topic overview + sub-topic list
+│       ├── 算法选择-GRPO-GSPO.md    #   Sub-topic: method comparison
+│       └── 奖励模型设计.md          #   Sub-topic: reward design
 └── 40_Digests/
-    └── 2026-W11-weekly-digest.md  # 周报
+    └── 2026-W12-weekly-digest.md   # Weekly digest
 ```
 
-## 架构
+## Scoring System
+
+Two-phase scoring minimizes API cost while maximizing relevance.
+
+**Phase 1 — Rule Scoring (free, all papers)**
+
+| Dimension | Weight | How |
+|-----------|--------|-----|
+| Keyword match | 40% | Title (1.5x) + abstract (0.8x) keyword hits |
+| Recency | 20% | 7d=10, 30d=7, 90d=4, older=1 |
+| Popularity | 30% | alphaXiv votes + visits |
+| Category match | 10% | arXiv category hit = 10, miss = 0 |
+
+**Phase 2 — AI Scoring (Top 20 only)**
+
+Claude evaluates research quality and relevance in-context. Final score = rule x 0.6 + AI x 0.4.
+
+## Architecture
 
 ```
-Claude Code
+Claude Code (user interaction)
   │
   ▼
-SKILL.md 编排层（.claude/skills/）
-  │ 调用 Python 脚本
+SKILL.md Orchestration (.claude/skills/)
+  │ calls Python scripts
   ▼
-入口脚本层（<skill>/scripts/*.py）
-  │ import lib/
+Entry Scripts (<skill>/scripts/*.py)
+  │ imports lib/
   ▼
-共享 Python 库（lib/）
-  ├── sources/alphaxiv.py   — alphaXiv 爬取
-  ├── sources/arxiv_api.py  — arXiv API
-  ├── scoring.py            — 规则评分引擎
-  ├── vault.py              — Vault 读写
-  └── models.py             — 数据模型
+Shared Library (lib/)
+  ├── sources/alphaxiv.py   — alphaXiv trending extraction
+  ├── sources/arxiv_api.py  — arXiv API search + batch fetch
+  ├── resolver.py           — Input resolution (ID/URL/title/PDF)
+  ├── scoring.py            — Rule-based scoring engine
+  ├── vault.py              — Vault I/O, config, dedup, wikilinks
+  └── models.py             — Paper, ScoredPaper (frozen dataclasses)
   │
   ▼
-Obsidian Vault（Markdown 文件）
+Obsidian Vault (Markdown + YAML frontmatter)
 ```
 
-## 评分系统
+SKILL.md files are natural-language workflow definitions that Claude follows step by step. Python handles data fetching, scoring, and vault I/O. Claude handles AI analysis, note generation, and user interaction.
 
-**Phase 1 — 规则评分（零成本，全量论文）**
-
-| 维度 | 权重 | 说明 |
-|------|------|------|
-| 关键词匹配 | 40% | 标题和摘要中的关键词命中 |
-| 新近性 | 20% | 7天内满分，逐级递减 |
-| 热度 | 30% | alphaXiv 投票数 + 访问量 |
-| 类别匹配 | 10% | arXiv 分类命中 |
-
-**Phase 2 — AI 评分（仅 Top 20）**
-
-Claude 评估质量和深度相关性，最终分 = 规则分 × 0.6 + AI 分 × 0.4
-
-## 配置示例
+## Configuration
 
 ```yaml
 vault_path: ~/obsidian-vault
-language: "mixed"  # English titles, 中文分析
+language: "mixed"  # English titles, Chinese analysis
 
 research_domains:
   "coding-agent":
     keywords: ["coding agent", "code generation", "code repair"]
     arxiv_categories: ["cs.AI", "cs.SE", "cs.CL"]
     priority: 5
+  "rl-for-code":
+    keywords: ["RLHF", "reinforcement learning", "reward model"]
+    arxiv_categories: ["cs.LG", "cs.AI"]
+    priority: 4
 
 excluded_keywords: ["survey", "review", "3D", "medical"]
 
@@ -158,18 +184,20 @@ scoring_weights:
   category_match: 0.1
 ```
 
-## 开发
+## Development
 
 ```bash
-# 运行测试
+# Run all tests (130 tests, ~0.5s)
 pytest
 
-# 带覆盖率
+# With coverage (target: 80%, current: 96%)
 pytest --cov=lib --cov-report=term-missing
 
-# 单个测试文件
-pytest tests/test_scoring.py -v
+# Single module
+pytest tests/test_resolver.py -v
 ```
+
+CI runs on every push/PR via GitHub Actions (Python 3.12 + 3.13).
 
 ## License
 
