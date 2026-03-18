@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Claude Code Skills-based paper tracking and insight knowledge management system. All user interaction happens through Skills (`/start-my-day`, `/paper-search`, etc.) — there is no standalone CLI. Obsidian vault is the sole storage layer (no database).
 
+## Vault Configuration
+
+Obsidian vault path is configured via `VAULT_PATH` environment variable:
+- **Claude Code sessions**: Auto-loaded from `.env` and project settings (`~/.claude/projects/.../settings.json`)
+- **Shell**: `export VAULT_PATH=/path/to/vault` or add to `.env`
+- **Scripts**: All entry scripts accept `--vault` flag; Skills use `$VAULT_PATH`
+
+Vault structure: `00_Config/`, `10_Daily/`, `20_Papers/<domain>/`, `30_Insights/<topic>/`, `40_Ideas/`
+
 ## Architecture
 
 Two layers share work:
@@ -62,3 +71,5 @@ python start-my-day/scripts/search_and_filter.py --config config.example.yaml --
 
 - Design spec: `docs/superpowers/specs/2026-03-16-auto-reading-v2-design.md`
 - Implementation plan: `docs/superpowers/plans/2026-03-16-auto-reading-v2-implementation.md`
+- Idea system spec: `docs/superpowers/specs/2026-03-18-idea-system-design.md`
+- Idea system plan: `docs/superpowers/plans/2026-03-18-idea-system-implementation.md`
