@@ -2,18 +2,19 @@
 
 **English** | [中文](./README.md)
 
-A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) Skills-powered research paper tracking and insight knowledge management system.
+A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) Skills-powered research paper tracking, insight knowledge management, and research idea generation system.
 
-Discover papers from [alphaXiv](https://alphaxiv.org) and arXiv, score them with rule + AI hybrid ranking, generate structured notes in your Obsidian vault, and build an evolving **topic -> sub-topic** insight knowledge graph across papers.
+Discover papers from [alphaXiv](https://alphaxiv.org) and arXiv, score them with rule + AI hybrid ranking, generate structured notes in your Obsidian vault, build an evolving **topic -> sub-topic** insight knowledge graph, and mine research ideas from accumulated knowledge.
 
 ## How It Works
 
 All interaction happens through Claude Code slash commands. There is no standalone CLI — Claude reads SKILL.md files and orchestrates Python scripts behind the scenes.
 
 ```
-You ──► /start-my-day ──► Claude fetches & scores papers ──► Daily note in vault
-You ──► /paper-import ──► Claude resolves & imports papers ──► Paper notes + insight linking
-You ──► /insight-init ──► Claude builds knowledge topic ──► Evolving insight graph
+You ──► /start-my-day  ──► Claude fetches & scores papers ──► Daily note in vault
+You ──► /paper-import  ──► Claude resolves & imports papers ──► Paper notes + insight linking
+You ──► /insight-init  ──► Claude builds knowledge topic  ──► Evolving insight graph
+You ──► /idea-generate ──► Claude analyzes gaps & crosses ──► Research idea notes
 ```
 
 ## Prerequisites
@@ -91,6 +92,18 @@ Create a knowledge topic, then grow it over time with `/insight-update`, `/insig
 | `/insight-review <topic>` | Review current state and open questions |
 | `/insight-connect <topicA> [topicB]` | Discover cross-topic connections |
 
+### Research Ideas
+
+| Command | Description |
+|---------|-------------|
+| `/idea-generate` | Mine research opportunities from Insight knowledge (gaps + cross-pollination) |
+| `/idea-generate --from-spark "desc"` | Deep-dive into a specific spark discovered in daily workflow |
+| `/idea-develop <idea-name>` | Progress an idea (spark -> exploring -> validated) |
+| `/idea-review` | Global dashboard: ranking, stale warnings, action suggestions |
+| `/idea-review <idea-name>` | Single idea deep review: novelty, feasibility, completeness |
+
+> `/start-my-day` and `/insight-update` automatically run lightweight Idea Spark checks — if a new paper could solve a known open question, a prompt appears at the end of the note.
+
 ### Configuration
 
 | Command | Description |
@@ -114,6 +127,10 @@ obsidian-vault/
 │       ├── _index.md               #   Topic overview + sub-topic list
 │       ├── Algorithm-Selection.md   #   Sub-topic: method comparison
 │       └── Reward-Design.md         #   Sub-topic: reward design
+├── 40_Ideas/
+│   ├── _dashboard.md               # Idea portfolio dashboard
+│   ├── gap-reward-long-horizon.md   # Gap-sourced idea
+│   └── cross-grpo-tool-use.md      # Cross-pollination idea
 └── 40_Digests/
     └── 2026-W12-weekly-digest.md   # Weekly digest
 ```

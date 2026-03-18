@@ -2,18 +2,19 @@
 
 [English](./README_EN.md) | **中文**
 
-基于 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) Skills 的论文追踪与 Insight 知识管理系统。
+基于 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) Skills 的论文追踪、Insight 知识管理与研究创意系统。
 
-从 [alphaXiv](https://alphaxiv.org) 和 arXiv 自动获取论文，通过规则 + AI 混合评分筛选推荐，生成结构化笔记存入 Obsidian vault，并构建**主题 → 技术点**的持续演化知识体系。
+从 [alphaXiv](https://alphaxiv.org) 和 arXiv 自动获取论文，通过规则 + AI 混合评分筛选推荐，生成结构化笔记存入 Obsidian vault，构建**主题 → 技术点**的持续演化知识体系，并从中挖掘研究 Idea。
 
 ## 工作方式
 
 所有交互通过 Claude Code 斜杠命令完成，没有独立的 CLI。Claude 读取 SKILL.md 文件并在后台编排 Python 脚本。
 
 ```
-你 ──► /start-my-day ──► Claude 抓取 & 评分论文 ──► 每日推荐笔记
-你 ──► /paper-import ──► Claude 解析 & 导入论文 ──► 论文笔记 + Insight 关联
-你 ──► /insight-init ──► Claude 构建知识主题 ──► 持续演化的知识图谱
+你 ──► /start-my-day  ──► Claude 抓取 & 评分论文 ──► 每日推荐笔记
+你 ──► /paper-import  ──► Claude 解析 & 导入论文 ──► 论文笔记 + Insight 关联
+你 ──► /insight-init  ──► Claude 构建知识主题  ──► 持续演化的知识图谱
+你 ──► /idea-generate ──► Claude 分析 gap & 交叉 ──► 研究 Idea 笔记
 ```
 
 ## 前置要求
@@ -91,6 +92,18 @@ Claude 会引导你设置 vault 路径、研究领域、关键词和评分权重
 | `/insight-review <主题>` | 回顾主题现状和开放问题 |
 | `/insight-connect <主题A> [主题B]` | 发现跨主题关联 |
 
+### 研究 Idea
+
+| 命令 | 说明 |
+|------|------|
+| `/idea-generate` | 从 Insight 知识库挖掘研究机会（gap + 跨领域组合） |
+| `/idea-generate --from-spark "描述"` | 基于日常发现的线索深入探索 |
+| `/idea-develop <idea名>` | 推进 Idea（spark→exploring→validated） |
+| `/idea-review` | 全局看板：排序、停滞预警、操作建议 |
+| `/idea-review <idea名>` | 单个 Idea 深度评审：新颖性、可行性、完整度 |
+
+> `/start-my-day` 和 `/insight-update` 会自动进行轻量 Idea Spark 检查——如果新论文恰好能解决某个已知开放问题，会在笔记末尾提示。
+
 ### 配置
 
 | 命令 | 说明 |
@@ -114,6 +127,10 @@ obsidian-vault/
 │       ├── _index.md               #   主题总览 + 技术点列表
 │       ├── 算法选择-GRPO-GSPO.md    #   技术点：方法对比
 │       └── 奖励模型设计.md          #   技术点：奖励设计
+├── 40_Ideas/
+│   ├── _dashboard.md               # Idea 全局看板
+│   ├── gap-reward-long-horizon.md   # Gap 类 Idea
+│   └── cross-grpo-tool-use.md      # 跨领域组合类 Idea
 └── 40_Digests/
     └── 2026-W12-weekly-digest.md   # 周报
 ```
