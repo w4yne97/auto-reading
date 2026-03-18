@@ -248,7 +248,7 @@ updated: 2026-03-18
    - **spark → exploring**：搜索相关工作（扫描 `20_Papers/` + 可调用 `/paper-search`）、初步方法草案、可行性分析
    - **exploring → validated**：精炼方法为具体方案、设计实验计划、制定时间线
    - **validated**：用户自行推进实际研究，可通过再次运行更新进展日志（不变更 status）
-   - **abandoned → spark**：重新激活，清空过时内容，从新的角度重新出发
+   - **abandoned → spark**：重新激活，保留已有内容（用户可手动清理），在进展日志中标注重新激活
    - **archived**：提示用户此 Idea 已归档，如需继续请创建新 Idea
 4. 每次 develop 在"进展日志"追加带日期的记录
 5. 更新 frontmatter（status、updated，可能更新 priority 和 evidence_level）
