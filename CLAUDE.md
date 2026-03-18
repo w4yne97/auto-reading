@@ -65,7 +65,6 @@ python start-my-day/scripts/search_and_filter.py --config config.example.yaml --
 
 - **130 tests** covering lib/ (unit) and entry scripts (integration)
 - Target: 80%+ coverage (currently 96%)
-- CI: GitHub Actions runs on push/PR for Python 3.12 and 3.13
 
 ## Spec and Plan
 

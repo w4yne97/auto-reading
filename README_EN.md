@@ -216,8 +216,6 @@ pytest --cov=lib --cov-report=term-missing
 pytest tests/test_resolver.py -v
 ```
 
-CI runs on every push/PR via GitHub Actions (Python 3.12 + 3.13).
-
 ## License
 
 MIT
