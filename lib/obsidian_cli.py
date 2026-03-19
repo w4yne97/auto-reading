@@ -1,5 +1,6 @@
 """Obsidian CLI wrapper -- single entry point for all vault operations."""
 
+import json
 import logging
 import os
 import shutil
@@ -9,6 +10,11 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _MACOS_DEFAULT = "/Applications/Obsidian.app/Contents/MacOS/obsidian"
+
+
+def _escape(text: str) -> str:
+    """Escape content for CLI argument passing."""
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 class CLINotFoundError(Exception):
@@ -95,3 +101,37 @@ class ObsidianCLI:
             raise RuntimeError(f"Obsidian CLI error: {stderr}")
 
         return result.stdout
+
+    # ── File operations ───────────────────────────────────────
+
+    def create_note(self, path: str, content: str, overwrite: bool = False) -> str:
+        args = ["create", f'path="{path}"', f'content="{_escape(content)}"']
+        if overwrite:
+            args.append("overwrite")
+        self._run(*args)
+        return path
+
+    def read_note(self, path: str) -> str:
+        return self._run("read", f'path="{path}"')
+
+    def delete_note(self, path: str, permanent: bool = False) -> None:
+        args = ["delete", f'path="{path}"']
+        if permanent:
+            args.append("permanent")
+        self._run(*args)
+
+    # ── Property operations ───────────────────────────────────
+
+    def get_property(self, path: str, name: str) -> str | None:
+        try:
+            out = self._run("property:read", f'name="{name}"', f'path="{path}"')
+            value = out.strip()
+            return value if value else None
+        except RuntimeError:
+            return None
+
+    def set_property(self, path: str, name: str, value: str, type: str = "text") -> None:
+        self._run(
+            "property:set", f'name="{name}"', f'value="{value}"',
+            f'type="{type}"', f'path="{path}"',
+        )
