@@ -85,6 +85,30 @@ class TestParseDateField:
         assert parse_date_field(20260316) is None
 
 
+class TestParseFrontmatter:
+    """Tests for _parse_frontmatter internal helper."""
+
+    def test_valid_frontmatter(self):
+        from lib.vault import _parse_frontmatter
+        content = "---\ntitle: Test\narxiv_id: '123'\ntags: [RL]\n---\n# Body"
+        fm = _parse_frontmatter(content)
+        assert fm["title"] == "Test"
+        assert fm["arxiv_id"] == "123"
+        assert fm["tags"] == ["RL"]
+
+    def test_missing_frontmatter(self):
+        from lib.vault import _parse_frontmatter
+        assert _parse_frontmatter("# Just a heading\nText.") == {}
+
+    def test_malformed_yaml(self):
+        from lib.vault import _parse_frontmatter
+        assert _parse_frontmatter("---\ntitle: [unclosed\n---\nBody.") == {}
+
+    def test_empty_frontmatter(self):
+        from lib.vault import _parse_frontmatter
+        assert _parse_frontmatter("---\n---\nBody.") == {}
+
+
 class TestGetVaultPath:
     def test_returns_cli_vault_path(self, mock_cli):
         assert get_vault_path(mock_cli) == "/tmp/test-vault"

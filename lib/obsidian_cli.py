@@ -131,10 +131,10 @@ class ObsidianCLI:
         except RuntimeError:
             return None
 
-    def set_property(self, path: str, name: str, value: str, type: str = "text") -> None:
+    def set_property(self, path: str, name: str, value: str, prop_type: str = "text") -> None:
         self._run(
             "property:set", f"name={name}", f"value={value}",
-            f"type={type}", f"path={path}",
+            f"type={prop_type}", f"path={path}",
         )
 
     # ── Search ────────────────────────────────────────────────

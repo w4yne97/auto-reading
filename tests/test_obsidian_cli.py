@@ -146,6 +146,15 @@ class TestFileOperations:
             args = mock_run.call_args[0][0]
             assert "overwrite" in args
 
+    def test_create_note_with_special_characters(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="Created: test.md", returncode=0, stderr="")
+            content = '---\ntitle: "Test = Paper"\nscore: 7.5\n---\n# Content with special chars: =, \\n, "'
+            cli.create_note("test.md", content)
+            args = mock_run.call_args[0][0]
+            # Content is passed as a single list element, not shell-parsed
+            assert any("content=" in a for a in args)
+
     def test_read_note(self, cli):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="---\ntitle: Test\n---\n# Body", returncode=0, stderr="")
