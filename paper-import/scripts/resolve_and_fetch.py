@@ -5,9 +5,8 @@ Usage:
     python paper-import/scripts/resolve_and_fetch.py \
         --inputs "2406.12345" "https://arxiv.org/abs/1706.03762" "Attention Is All You Need" \
         --config /path/to/research_interests.yaml \
-        --vault /path/to/vault \
         --output /tmp/auto-reading/import_result.json \
-        [--verbose]
+        [--vault-name NAME] [--verbose]
 """
 
 import argparse
@@ -19,7 +18,7 @@ from pathlib import Path
 from lib.resolver import resolve_inputs
 from lib.scoring import best_domain, matched_keywords
 from lib.sources.arxiv_api import fetch_papers_batch
-from lib.vault import load_config, scan_papers, build_dedup_set
+from lib.vault import load_config, create_cli, build_dedup_set
 
 logger = logging.getLogger("resolve_and_fetch")
 
@@ -28,8 +27,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Resolve and fetch papers for import")
     parser.add_argument("--inputs", nargs="+", required=True, help="Paper references (IDs, URLs, titles)")
     parser.add_argument("--config", required=True)
-    parser.add_argument("--vault", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--vault-name", default=None)
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -42,9 +41,8 @@ def main() -> None:
     config = load_config(args.config)
     domains = config.get("research_domains", {})
 
-    vault_path = Path(args.vault)
-    existing = scan_papers(vault_path)
-    dedup_ids = build_dedup_set(existing)
+    cli = create_cli(args.vault_name)
+    dedup_ids = build_dedup_set(cli)
     logger.info("Dedup set: %d existing papers", len(dedup_ids))
 
     resolved = resolve_inputs(args.inputs, retry_delay=3.0)

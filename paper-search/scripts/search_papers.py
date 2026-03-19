@@ -4,10 +4,9 @@
 Usage:
     python paper-search/scripts/search_papers.py \
         --config /path/to/research_interests.yaml \
-        --vault /path/to/vault \
         --keywords "coding agent" "reinforcement learning" \
         --output /tmp/auto-reading/search_result.json \
-        [--days 30] [--max-results 50] [--verbose]
+        [--vault-name NAME] [--days 30] [--max-results 50] [--verbose]
 """
 
 import argparse
@@ -19,7 +18,7 @@ from pathlib import Path
 from lib.models import scored_paper_to_dict
 from lib.sources.arxiv_api import search_arxiv
 from lib.scoring import score_papers
-from lib.vault import load_config, scan_papers, build_dedup_set
+from lib.vault import load_config, create_cli, build_dedup_set
 
 logger = logging.getLogger("search_papers")
 
@@ -27,8 +26,8 @@ logger = logging.getLogger("search_papers")
 def main() -> None:
     parser = argparse.ArgumentParser(description="Search papers by keywords")
     parser.add_argument("--config", required=True)
-    parser.add_argument("--vault", required=True)
     parser.add_argument("--keywords", nargs="+", required=True)
+    parser.add_argument("--vault-name", default=None)
     parser.add_argument("--output", required=True)
     parser.add_argument("--days", type=int, default=30)
     parser.add_argument("--max-results", type=int, default=50)
@@ -48,9 +47,8 @@ def main() -> None:
     domains = config.get("research_domains", {})
     weights = config.get("scoring_weights", {})
 
-    vault_path = Path(args.vault)
-    existing = scan_papers(vault_path)
-    dedup_ids = build_dedup_set(existing)
+    cli = create_cli(args.vault_name)
+    dedup_ids = build_dedup_set(cli)
 
     all_categories = []
     for cfg in domains.values():

@@ -4,9 +4,8 @@
 Usage:
     python start-my-day/scripts/search_and_filter.py \
         --config /path/to/research_interests.yaml \
-        --vault /path/to/vault \
         --output /tmp/auto-reading/result.json \
-        [--top-n 20] [--verbose]
+        [--vault-name NAME] [--top-n 20] [--verbose]
 """
 
 import argparse
@@ -19,7 +18,7 @@ from lib.models import scored_paper_to_dict
 from lib.sources.alphaxiv import fetch_trending, AlphaXivError
 from lib.sources.arxiv_api import search_arxiv
 from lib.scoring import score_papers
-from lib.vault import load_config, scan_papers, build_dedup_set
+from lib.vault import load_config, create_cli, build_dedup_set
 
 logger = logging.getLogger("search_and_filter")
 
@@ -39,8 +38,8 @@ def _cleanup_tmp(output_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Search and filter papers")
     parser.add_argument("--config", required=True, help="Path to research_interests.yaml")
-    parser.add_argument("--vault", required=True, help="Path to Obsidian vault")
     parser.add_argument("--output", required=True, help="Output JSON path")
+    parser.add_argument("--vault-name", default=None, help="Obsidian vault name")
     parser.add_argument("--top-n", type=int, default=20, help="Number of top papers")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
@@ -57,9 +56,8 @@ def main() -> None:
     weights = config.get("scoring_weights", {})
     excluded = [kw.lower() for kw in config.get("excluded_keywords", [])]
 
-    vault_path = Path(args.vault)
-    existing = scan_papers(vault_path)
-    dedup_ids = build_dedup_set(existing)
+    cli = create_cli(args.vault_name)
+    dedup_ids = build_dedup_set(cli)
     logger.info("Dedup set: %d existing papers", len(dedup_ids))
 
     papers = []
