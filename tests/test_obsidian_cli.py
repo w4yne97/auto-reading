@@ -137,7 +137,7 @@ class TestFileOperations:
             assert result == "20_Papers/test/Note.md"
             args = mock_run.call_args[0][0]
             assert "create" in args
-            assert 'path="20_Papers/test/Note.md"' in args
+            assert "path=20_Papers/test/Note.md" in args
 
     def test_create_note_with_overwrite(self, cli):
         with patch("subprocess.run") as mock_run:
@@ -190,8 +190,8 @@ class TestPropertyOperations:
             cli.set_property("test.md", "status", "read")
             args = mock_run.call_args[0][0]
             assert "property:set" in args
-            assert 'name="status"' in args
-            assert 'value="read"' in args
+            assert "name=status" in args
+            assert "value=read" in args
 
 
 class TestSearch:
@@ -217,6 +217,12 @@ class TestSearch:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="[]", returncode=0, stderr="")
             result = cli.search("nonexistent")
+            assert result == []
+
+    def test_search_no_matches_text_returns_empty(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="No matches found.\n", returncode=0, stderr="")
+            result = cli.search("nonexistent_query_xyz")
             assert result == []
 
     def test_search_context_returns_dicts(self, cli):

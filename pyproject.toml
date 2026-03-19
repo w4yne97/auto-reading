@@ -24,3 +24,6 @@ packages = ["lib"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: tests requiring real Obsidian CLI (deselect with '-m not integration')",
+]

@@ -11,10 +11,7 @@ logger = logging.getLogger(__name__)
 
 _MACOS_DEFAULT = "/Applications/Obsidian.app/Contents/MacOS/obsidian"
 
-
-def _escape(text: str) -> str:
-    """Escape content for CLI argument passing."""
-    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+_NO_MATCHES = "No matches found."
 
 
 class CLINotFoundError(Exception):
@@ -30,6 +27,10 @@ class ObsidianCLI:
 
     Immutable after __init__ -- vault_name, vault_path, and _cli_path
     are set once and never change.
+
+    Argument format: all key=value pairs are passed WITHOUT shell quoting
+    around values, since subprocess.run receives a list and does not use
+    a shell. The CLI parses ``key=value`` tokens directly.
     """
 
     def __init__(self, vault_name: str | None = None) -> None:
@@ -105,17 +106,17 @@ class ObsidianCLI:
     # ── File operations ───────────────────────────────────────
 
     def create_note(self, path: str, content: str, overwrite: bool = False) -> str:
-        args = ["create", f'path="{path}"', f'content="{_escape(content)}"']
+        args = ["create", f"path={path}", f"content={content}"]
         if overwrite:
             args.append("overwrite")
         self._run(*args)
         return path
 
     def read_note(self, path: str) -> str:
-        return self._run("read", f'path="{path}"')
+        return self._run("read", f"path={path}")
 
     def delete_note(self, path: str, permanent: bool = False) -> None:
-        args = ["delete", f'path="{path}"']
+        args = ["delete", f"path={path}"]
         if permanent:
             args.append("permanent")
         self._run(*args)
@@ -124,7 +125,7 @@ class ObsidianCLI:
 
     def get_property(self, path: str, name: str) -> str | None:
         try:
-            out = self._run("property:read", f'name="{name}"', f'path="{path}"')
+            out = self._run("property:read", f"name={name}", f"path={path}")
             value = out.strip()
             return value if value else None
         except RuntimeError:
@@ -132,39 +133,45 @@ class ObsidianCLI:
 
     def set_property(self, path: str, name: str, value: str, type: str = "text") -> None:
         self._run(
-            "property:set", f'name="{name}"', f'value="{value}"',
-            f'type="{type}"', f'path="{path}"',
+            "property:set", f"name={name}", f"value={value}",
+            f"type={type}", f"path={path}",
         )
 
     # ── Search ────────────────────────────────────────────────
 
     def search(self, query: str, path: str | None = None, limit: int | None = None) -> list[str]:
-        args = ["search", f'query="{_escape(query)}"', "format=json"]
+        args = ["search", f"query={query}", "format=json"]
         if path:
-            args.append(f'path="{path}"')
+            args.append(f"path={path}")
         if limit is not None:
             args.append(f"limit={limit}")
         out = self._run(*args, timeout=60)
-        return json.loads(out) if out.strip() else []
+        stripped = out.strip()
+        if not stripped or stripped == _NO_MATCHES:
+            return []
+        return json.loads(stripped)
 
     def search_context(self, query: str, path: str | None = None, limit: int | None = None) -> list[dict]:
-        args = ["search:context", f'query="{_escape(query)}"', "format=json"]
+        args = ["search:context", f"query={query}", "format=json"]
         if path:
-            args.append(f'path="{path}"')
+            args.append(f"path={path}")
         if limit is not None:
             args.append(f"limit={limit}")
         out = self._run(*args, timeout=60)
-        return json.loads(out) if out.strip() else []
+        stripped = out.strip()
+        if not stripped or stripped == _NO_MATCHES:
+            return []
+        return json.loads(stripped)
 
     # ── Link graph ────────────────────────────────────────────
 
     def backlinks(self, path: str) -> list[str]:
-        out = self._run("backlinks", f'path="{path}"', "format=json")
+        out = self._run("backlinks", f"path={path}", "format=json")
         entries = json.loads(out) if out.strip() else []
         return [e["file"] for e in entries]
 
     def outgoing_links(self, path: str) -> list[str]:
-        out = self._run("links", f'path="{path}"')
+        out = self._run("links", f"path={path}")
         return [line for line in out.strip().splitlines() if line]
 
     def unresolved_links(self) -> list[dict]:
@@ -176,18 +183,18 @@ class ObsidianCLI:
     def list_files(self, folder: str | None = None, ext: str | None = None) -> list[str]:
         args = ["files"]
         if folder:
-            args.append(f'folder="{folder}"')
+            args.append(f"folder={folder}")
         if ext:
-            args.append(f'ext="{ext}"')
+            args.append(f"ext={ext}")
         out = self._run(*args)
         return [line for line in out.strip().splitlines() if line]
 
     def file_count(self, folder: str | None = None, ext: str | None = None) -> int:
         args = ["files", "total"]
         if folder:
-            args.append(f'folder="{folder}"')
+            args.append(f"folder={folder}")
         if ext:
-            args.append(f'ext="{ext}"')
+            args.append(f"ext={ext}")
         out = self._run(*args)
         return int(out.strip())
 
@@ -196,7 +203,7 @@ class ObsidianCLI:
     def tags(self, path: str | None = None) -> list[dict]:
         args = ["tags", "format=json"]
         if path:
-            args.append(f'path="{path}"')
+            args.append(f"path={path}")
         out = self._run(*args)
         return json.loads(out) if out.strip() else []
 
