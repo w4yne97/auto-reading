@@ -135,3 +135,78 @@ class ObsidianCLI:
             "property:set", f'name="{name}"', f'value="{value}"',
             f'type="{type}"', f'path="{path}"',
         )
+
+    # ── Search ────────────────────────────────────────────────
+
+    def search(self, query: str, path: str | None = None, limit: int | None = None) -> list[str]:
+        args = ["search", f'query="{_escape(query)}"', "format=json"]
+        if path:
+            args.append(f'path="{path}"')
+        if limit is not None:
+            args.append(f"limit={limit}")
+        out = self._run(*args, timeout=60)
+        return json.loads(out) if out.strip() else []
+
+    def search_context(self, query: str, path: str | None = None, limit: int | None = None) -> list[dict]:
+        args = ["search:context", f'query="{_escape(query)}"', "format=json"]
+        if path:
+            args.append(f'path="{path}"')
+        if limit is not None:
+            args.append(f"limit={limit}")
+        out = self._run(*args, timeout=60)
+        return json.loads(out) if out.strip() else []
+
+    # ── Link graph ────────────────────────────────────────────
+
+    def backlinks(self, path: str) -> list[str]:
+        out = self._run("backlinks", f'path="{path}"', "format=json")
+        entries = json.loads(out) if out.strip() else []
+        return [e["file"] for e in entries]
+
+    def outgoing_links(self, path: str) -> list[str]:
+        out = self._run("links", f'path="{path}"')
+        return [line for line in out.strip().splitlines() if line]
+
+    def unresolved_links(self) -> list[dict]:
+        out = self._run("unresolved", "format=json")
+        return json.loads(out) if out.strip() else []
+
+    # ── File listing ──────────────────────────────────────────
+
+    def list_files(self, folder: str | None = None, ext: str | None = None) -> list[str]:
+        args = ["files"]
+        if folder:
+            args.append(f'folder="{folder}"')
+        if ext:
+            args.append(f'ext="{ext}"')
+        out = self._run(*args)
+        return [line for line in out.strip().splitlines() if line]
+
+    def file_count(self, folder: str | None = None, ext: str | None = None) -> int:
+        args = ["files", "total"]
+        if folder:
+            args.append(f'folder="{folder}"')
+        if ext:
+            args.append(f'ext="{ext}"')
+        out = self._run(*args)
+        return int(out.strip())
+
+    # ── Tags ──────────────────────────────────────────────────
+
+    def tags(self, path: str | None = None) -> list[dict]:
+        args = ["tags", "format=json"]
+        if path:
+            args.append(f'path="{path}"')
+        out = self._run(*args)
+        return json.loads(out) if out.strip() else []
+
+    # ── Vault info ────────────────────────────────────────────
+
+    def vault_info(self) -> dict:
+        out = self._run("vault")
+        result = {}
+        for line in out.strip().splitlines():
+            if "\t" in line:
+                key, value = line.split("\t", 1)
+                result[key] = value
+        return result

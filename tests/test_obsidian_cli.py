@@ -192,3 +192,149 @@ class TestPropertyOperations:
             assert "property:set" in args
             assert 'name="status"' in args
             assert 'value="read"' in args
+
+
+class TestSearch:
+    @pytest.fixture()
+    def cli(self):
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/usr/bin/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/tmp/vault", returncode=0, stderr="")
+            instance = ObsidianCLI()
+        instance._cli_path = "/usr/bin/obsidian"
+        return instance
+
+    def test_search_returns_paths(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout='["20_Papers/a/p1.md","20_Papers/b/p2.md"]', returncode=0, stderr=""
+            )
+            result = cli.search("arxiv_id", path="20_Papers", limit=5)
+            assert result == ["20_Papers/a/p1.md", "20_Papers/b/p2.md"]
+
+    def test_search_no_results(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="[]", returncode=0, stderr="")
+            result = cli.search("nonexistent")
+            assert result == []
+
+    def test_search_context_returns_dicts(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout=json.dumps([{"file": "20_Papers/test.md", "matches": [{"line": 5, "text": "arxiv_id: 123"}]}]),
+                returncode=0, stderr=""
+            )
+            result = cli.search_context("arxiv_id", path="20_Papers")
+            assert len(result) == 1
+            assert result[0]["file"] == "20_Papers/test.md"
+
+    def test_search_uses_60s_timeout(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="[]", returncode=0, stderr="")
+            cli.search("test")
+            _, kwargs = mock_run.call_args
+            assert kwargs["timeout"] == 60
+
+
+class TestLinkGraph:
+    @pytest.fixture()
+    def cli(self):
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/usr/bin/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/tmp/vault", returncode=0, stderr="")
+            instance = ObsidianCLI()
+        instance._cli_path = "/usr/bin/obsidian"
+        return instance
+
+    def test_backlinks(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout=json.dumps([{"file": "10_Daily/2026-03-18.md"}, {"file": "30_Insights/topic/note.md"}]),
+                returncode=0, stderr=""
+            )
+            result = cli.backlinks("20_Papers/test.md")
+            assert result == ["10_Daily/2026-03-18.md", "30_Insights/topic/note.md"]
+
+    def test_outgoing_links(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="30_Insights/topic/A.md\n30_Insights/topic/B.md\n", returncode=0, stderr=""
+            )
+            result = cli.outgoing_links("20_Papers/test.md")
+            assert result == ["30_Insights/topic/A.md", "30_Insights/topic/B.md"]
+
+    def test_unresolved_links(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout=json.dumps([{"link": "nonexistent", "count": 3}, {"link": "missing-note", "count": 1}]),
+                returncode=0, stderr=""
+            )
+            result = cli.unresolved_links()
+            assert len(result) == 2
+
+
+class TestListing:
+    @pytest.fixture()
+    def cli(self):
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/usr/bin/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/tmp/vault", returncode=0, stderr="")
+            instance = ObsidianCLI()
+        instance._cli_path = "/usr/bin/obsidian"
+        return instance
+
+    def test_list_files(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="20_Papers/a/p1.md\n20_Papers/b/p2.md\n", returncode=0, stderr=""
+            )
+            result = cli.list_files(folder="20_Papers", ext="md")
+            assert len(result) == 2
+
+    def test_file_count(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="189", returncode=0, stderr="")
+            result = cli.file_count(folder="20_Papers", ext="md")
+            assert result == 189
+
+
+class TestTags:
+    @pytest.fixture()
+    def cli(self):
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/usr/bin/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/tmp/vault", returncode=0, stderr="")
+            instance = ObsidianCLI()
+        instance._cli_path = "/usr/bin/obsidian"
+        return instance
+
+    def test_tags_for_file(self, cli):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout=json.dumps([{"tag": "#agent-alignment"}, {"tag": "#GRPO"}]),
+                returncode=0, stderr=""
+            )
+            result = cli.tags(path="20_Papers/test.md")
+            assert len(result) == 2
+            assert result[0]["tag"] == "#agent-alignment"
+
+
+class TestVaultInfo:
+    def test_vault_info(self):
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/usr/bin/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=True), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/tmp/vault", returncode=0, stderr="")
+            cli = ObsidianCLI()
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="name\tauto-reading-vault\npath\t/tmp/vault\nfiles\t223\nfolders\t16\nsize\t1490494",
+                returncode=0, stderr=""
+            )
+            result = cli.vault_info()
+            assert result["name"] == "auto-reading-vault"
+            assert result["files"] == "223"
