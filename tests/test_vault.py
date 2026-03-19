@@ -1,15 +1,41 @@
-"""Tests for vault operations."""
+"""Tests for vault business logic (mocking ObsidianCLI)."""
 
-import textwrap
 from datetime import date
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from lib.vault import load_config, parse_date_field, parse_frontmatter, scan_papers, build_dedup_set, generate_wikilinks, write_note
+from lib.vault import (
+    create_cli,
+    get_vault_path,
+    load_config,
+    parse_date_field,
+    scan_papers,
+    scan_papers_since,
+    scan_insights_since,
+    list_daily_notes,
+    build_dedup_set,
+    write_paper_note,
+    get_paper_status,
+    set_paper_status,
+    get_paper_backlinks,
+    get_paper_links,
+    search_vault,
+    get_unresolved_links,
+)
+
+
+@pytest.fixture()
+def mock_cli():
+    cli = MagicMock()
+    cli.vault_path = "/tmp/test-vault"
+    return cli
 
 
 class TestLoadConfig:
+    """load_config is unchanged — still reads from filesystem."""
+
     def test_valid_config(self, tmp_path: Path):
         cfg = tmp_path / "config.yaml"
         cfg.write_text("research_domains:\n  test:\n    keywords: [hello]\n")
@@ -60,160 +86,209 @@ class TestParseDateField:
 
 
 class TestParseFrontmatter:
-    def test_valid_frontmatter(self):
-        content = textwrap.dedent("""\
-            ---
-            title: "Test Paper"
-            arxiv_id: "2406.12345"
-            domain: coding-agent
-            tags: [RL, RLHF]
-            score: 8.2
-            status: unread
-            ---
+    """Tests for _parse_frontmatter internal helper."""
 
-            ## Summary
-            Some content here.
-        """)
-        fm = parse_frontmatter(content)
-        assert fm["title"] == "Test Paper"
-        assert fm["arxiv_id"] == "2406.12345"
-        assert fm["tags"] == ["RL", "RLHF"]
+    def test_valid_frontmatter(self):
+        from lib.vault import _parse_frontmatter
+        content = "---\ntitle: Test\narxiv_id: '123'\ntags: [RL]\n---\n# Body"
+        fm = _parse_frontmatter(content)
+        assert fm["title"] == "Test"
+        assert fm["arxiv_id"] == "123"
+        assert fm["tags"] == ["RL"]
 
     def test_missing_frontmatter(self):
-        content = "# Just a heading\n\nSome text."
-        fm = parse_frontmatter(content)
-        assert fm == {}
+        from lib.vault import _parse_frontmatter
+        assert _parse_frontmatter("# Just a heading\nText.") == {}
 
     def test_malformed_yaml(self):
-        content = "---\ntitle: [unclosed\n---\nBody."
-        fm = parse_frontmatter(content)
-        assert fm == {}
+        from lib.vault import _parse_frontmatter
+        assert _parse_frontmatter("---\ntitle: [unclosed\n---\nBody.") == {}
 
     def test_empty_frontmatter(self):
-        content = "---\n---\nBody."
-        fm = parse_frontmatter(content)
-        assert fm == {}
+        from lib.vault import _parse_frontmatter
+        assert _parse_frontmatter("---\n---\nBody.") == {}
+
+
+class TestGetVaultPath:
+    def test_returns_cli_vault_path(self, mock_cli):
+        assert get_vault_path(mock_cli) == "/tmp/test-vault"
 
 
 class TestScanPapers:
-    def test_scan_papers_directory(self, tmp_path: Path):
-        papers_dir = tmp_path / "20_Papers" / "coding-agent"
-        papers_dir.mkdir(parents=True)
-
-        note1 = papers_dir / "Paper-A.md"
-        note1.write_text(textwrap.dedent("""\
-            ---
-            title: "Paper A"
-            arxiv_id: "2406.00001"
-            domain: coding-agent
-            score: 7.5
-            ---
-
-            Content.
-        """))
-
-        note2 = papers_dir / "Paper-B.md"
-        note2.write_text(textwrap.dedent("""\
-            ---
-            title: "Paper B"
-            arxiv_id: "2406.00002"
-            domain: coding-agent
-            score: 6.0
-            ---
-
-            Content.
-        """))
-
-        results = scan_papers(tmp_path)
+    def test_scan_papers(self, mock_cli):
+        mock_cli.list_files.return_value = [
+            "20_Papers/coding-agent/Paper-A.md",
+            "20_Papers/coding-agent/Paper-B.md",
+        ]
+        mock_cli.read_note.side_effect = [
+            '---\ntitle: "Paper A"\narxiv_id: "2406.00001"\ndomain: coding-agent\nscore: 7.5\n---\nContent.',
+            '---\ntitle: "Paper B"\narxiv_id: "2406.00002"\ndomain: coding-agent\nscore: 6.0\n---\nContent.',
+        ]
+        results = scan_papers(mock_cli)
         assert len(results) == 2
         ids = {r["arxiv_id"] for r in results}
         assert ids == {"2406.00001", "2406.00002"}
+        assert all("_path" in r for r in results)
 
-    def test_scan_skips_corrupted_frontmatter(self, tmp_path: Path):
-        papers_dir = tmp_path / "20_Papers" / "other"
-        papers_dir.mkdir(parents=True)
-
-        bad = papers_dir / "Bad-Note.md"
-        bad.write_text("# No frontmatter\nJust text.")
-
-        good = papers_dir / "Good-Note.md"
-        good.write_text("---\narxiv_id: '2406.00003'\ntitle: Good\n---\nContent.")
-
-        results = scan_papers(tmp_path)
+    def test_scan_skips_without_arxiv_id(self, mock_cli):
+        mock_cli.list_files.return_value = ["20_Papers/a/p1.md", "20_Papers/a/p2.md"]
+        mock_cli.read_note.side_effect = [
+            "# No frontmatter\nJust text.",
+            '---\narxiv_id: "2406.00003"\ntitle: Good\n---\nContent.',
+        ]
+        results = scan_papers(mock_cli)
         assert len(results) == 1
         assert results[0]["arxiv_id"] == "2406.00003"
 
-    def test_scan_empty_vault(self, tmp_path: Path):
-        results = scan_papers(tmp_path)
+    def test_scan_empty_vault(self, mock_cli):
+        mock_cli.list_files.return_value = []
+        assert scan_papers(mock_cli) == []
+
+    def test_scan_tolerates_read_error(self, mock_cli):
+        mock_cli.list_files.return_value = ["20_Papers/a/p1.md", "20_Papers/a/p2.md"]
+        mock_cli.read_note.side_effect = [
+            RuntimeError("file not found"),
+            '---\narxiv_id: "2406.00004"\n---\nOK.',
+        ]
+        results = scan_papers(mock_cli)
+        assert len(results) == 1
+
+    def test_scan_deduplicates_by_arxiv_id(self, mock_cli):
+        mock_cli.list_files.return_value = [
+            "20_Papers/coding-agent/Paper-A.md",
+            "20_Papers/rl-for-code/Paper-A-copy.md",
+        ]
+        mock_cli.read_note.side_effect = [
+            '---\narxiv_id: "2406.00001"\ntitle: "Paper A"\n---\n',
+            '---\narxiv_id: "2406.00001"\ntitle: "Paper A copy"\n---\n',
+        ]
+        results = scan_papers(mock_cli)
+        assert len(results) == 1
+        assert results[0]["_path"] == "20_Papers/coding-agent/Paper-A.md"
+
+
+class TestScanPapersSince:
+    def test_filters_by_date(self, mock_cli):
+        mock_cli.list_files.return_value = ["20_Papers/a/p1.md", "20_Papers/a/p2.md"]
+        mock_cli.read_note.side_effect = [
+            '---\narxiv_id: "001"\nfetched: "2026-03-18"\n---\n',
+            '---\narxiv_id: "002"\nfetched: "2026-03-10"\n---\n',
+        ]
+        results = scan_papers_since(mock_cli, date(2026, 3, 15))
+        assert len(results) == 1
+        assert results[0]["arxiv_id"] == "001"
+
+    def test_empty_when_none_match(self, mock_cli):
+        mock_cli.list_files.return_value = ["20_Papers/a/p1.md"]
+        mock_cli.read_note.return_value = '---\narxiv_id: "001"\nfetched: "2026-01-01"\n---\n'
+        results = scan_papers_since(mock_cli, date(2026, 3, 15))
         assert results == []
 
-    def test_scan_tolerates_missing_fields(self, tmp_path: Path):
-        papers_dir = tmp_path / "20_Papers" / "coding-agent"
-        papers_dir.mkdir(parents=True)
 
-        v1_note = papers_dir / "Old-Note.md"
-        v1_note.write_text("---\narxiv_id: '2406.00004'\ncategory: coding-agent\ndate: 2026-01-01\n---\nOld.")
-
-        results = scan_papers(tmp_path)
+class TestScanInsightsSince:
+    def test_filters_insights_by_date(self, mock_cli):
+        mock_cli.list_files.return_value = [
+            "30_Insights/topic/note1.md",
+            "30_Insights/topic/note2.md",
+        ]
+        mock_cli.read_note.side_effect = [
+            '---\ntitle: "Insight A"\ntype: technique\nupdated: "2026-03-18"\n---\n',
+            '---\ntitle: "Insight B"\ntype: overview\nupdated: "2026-02-01"\n---\n',
+        ]
+        results = scan_insights_since(mock_cli, date(2026, 3, 15))
         assert len(results) == 1
-        assert results[0]["arxiv_id"] == "2406.00004"
+        assert results[0]["title"] == "Insight A"
+        assert results[0]["updated"] == "2026-03-18"
+
+
+class TestListDailyNotes:
+    def test_filters_by_filename_date(self, mock_cli):
+        mock_cli.list_files.return_value = [
+            "10_Daily/2026-03-19-论文推荐.md",
+            "10_Daily/2026-03-18-论文推荐.md",
+            "10_Daily/2026-03-10-论文推荐.md",
+        ]
+        results = list_daily_notes(mock_cli, date(2026, 3, 15))
+        assert len(results) == 2
+        assert results[0] == "2026-03-19-论文推荐.md"
+        assert results[1] == "2026-03-18-论文推荐.md"
+
+    def test_returns_filenames_not_paths(self, mock_cli):
+        mock_cli.list_files.return_value = ["10_Daily/2026-03-19-test.md"]
+        results = list_daily_notes(mock_cli, date(2026, 3, 1))
+        assert results == ["2026-03-19-test.md"]
 
 
 class TestBuildDedupSet:
-    def test_dedup_from_scan_results(self):
-        scan_results = [
-            {"arxiv_id": "2406.00001", "title": "A"},
-            {"arxiv_id": "2406.00002", "title": "B"},
+    def test_build_dedup_set(self, mock_cli):
+        mock_cli.search.return_value = [
+            "20_Papers/a/p1.md",
+            "20_Papers/b/p2.md",
         ]
-        dedup = build_dedup_set(scan_results)
-        assert dedup == {"2406.00001", "2406.00002"}
+        mock_cli.get_property.side_effect = ["2406.00001", "2406.00002"]
+        result = build_dedup_set(mock_cli)
+        assert result == {"2406.00001", "2406.00002"}
+        mock_cli.search.assert_called_once_with("arxiv_id", path="20_Papers")
 
-    def test_dedup_empty(self):
-        assert build_dedup_set([]) == set()
+    def test_build_dedup_set_empty(self, mock_cli):
+        mock_cli.search.return_value = []
+        assert build_dedup_set(mock_cli) == set()
 
-    def test_dedup_skips_missing_id(self):
-        scan_results = [
-            {"arxiv_id": "2406.00001"},
-            {"title": "No ID"},
+    def test_build_dedup_set_skips_none_property(self, mock_cli):
+        mock_cli.search.return_value = ["p1.md", "p2.md"]
+        mock_cli.get_property.side_effect = ["2406.00001", None]
+        result = build_dedup_set(mock_cli)
+        assert result == {"2406.00001"}
+
+
+class TestWritePaperNote:
+    def test_write_paper_note(self, mock_cli):
+        mock_cli.create_note.return_value = "20_Papers/test/Note.md"
+        result = write_paper_note(mock_cli, "20_Papers/test/Note.md", "# Content")
+        assert result == "20_Papers/test/Note.md"
+        mock_cli.create_note.assert_called_once_with(
+            "20_Papers/test/Note.md", "# Content", overwrite=True
+        )
+
+    def test_write_paper_note_overwrite_default(self, mock_cli):
+        mock_cli.create_note.return_value = "test.md"
+        write_paper_note(mock_cli, "test.md", "content")
+        _, kwargs = mock_cli.create_note.call_args
+        assert kwargs.get("overwrite", True) is True
+
+
+class TestPaperStatus:
+    def test_get_paper_status(self, mock_cli):
+        mock_cli.get_property.return_value = "unread"
+        assert get_paper_status(mock_cli, "20_Papers/test.md") == "unread"
+
+    def test_set_paper_status(self, mock_cli):
+        set_paper_status(mock_cli, "20_Papers/test.md", "read")
+        mock_cli.set_property.assert_called_once_with(
+            "20_Papers/test.md", "status", "read"
+        )
+
+
+class TestCLINativeCapabilities:
+    def test_get_paper_backlinks(self, mock_cli):
+        mock_cli.backlinks.return_value = ["10_Daily/2026-03-18.md"]
+        result = get_paper_backlinks(mock_cli, "20_Papers/test.md")
+        assert result == ["10_Daily/2026-03-18.md"]
+
+    def test_get_paper_links(self, mock_cli):
+        mock_cli.outgoing_links.return_value = ["30_Insights/topic/A.md"]
+        result = get_paper_links(mock_cli, "20_Papers/test.md")
+        assert result == ["30_Insights/topic/A.md"]
+
+    def test_search_vault(self, mock_cli):
+        mock_cli.search_context.return_value = [
+            {"file": "test.md", "matches": [{"line": 1, "text": "hit"}]}
         ]
-        dedup = build_dedup_set(scan_results)
-        assert dedup == {"2406.00001"}
+        result = search_vault(mock_cli, "GRPO", path="30_Insights")
+        assert len(result) == 1
+        mock_cli.search_context.assert_called_once_with("GRPO", path="30_Insights", limit=20)
 
-
-class TestGenerateWikilinks:
-    def test_replace_known_keyword(self):
-        text = "We use BLIP for training."
-        index = {"blip": "20_Papers/multimodal/BLIP.md"}
-        result = generate_wikilinks(text, index)
-        assert "[[BLIP]]" in result
-
-    def test_preserve_existing_wikilink(self):
-        text = "See [[BLIP]] for details."
-        index = {"blip": "20_Papers/multimodal/BLIP.md"}
-        result = generate_wikilinks(text, index)
-        assert result.count("[[BLIP]]") == 1
-
-    def test_skip_code_blocks(self):
-        text = "Use `BLIP` in code.\n```\nBLIP = load()\n```"
-        index = {"blip": "20_Papers/multimodal/BLIP.md"}
-        result = generate_wikilinks(text, index)
-        assert "[[BLIP]]" not in result
-        assert "`BLIP`" in result
-
-    def test_no_match(self):
-        text = "Nothing relevant here."
-        index = {"blip": "20_Papers/multimodal/BLIP.md"}
-        result = generate_wikilinks(text, index)
-        assert result == text
-
-
-class TestWriteNote:
-    def test_write_creates_file(self, tmp_path: Path):
-        path = write_note(tmp_path, "20_Papers/test/Note.md", "---\ntitle: X\n---\nBody")
-        assert path.exists()
-        assert "title: X" in path.read_text()
-
-    def test_write_creates_directories(self, tmp_path: Path):
-        path = write_note(tmp_path, "deep/nested/dir/Note.md", "Content")
-        assert path.exists()
-        assert path.read_text() == "Content"
+    def test_get_unresolved_links(self, mock_cli):
+        mock_cli.unresolved_links.return_value = [{"link": "missing", "count": 3}]
+        result = get_unresolved_links(mock_cli)
+        assert len(result) == 1

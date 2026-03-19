@@ -2,7 +2,7 @@
 
 import json
 import sys
-import textwrap
+from importlib import import_module
 from unittest.mock import patch
 
 import responses
@@ -11,12 +11,14 @@ from tests.conftest import SAMPLE_ARXIV_XML
 
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+_MOD_PATH = "paper-import.scripts.resolve_and_fetch"
+_mod = import_module(_MOD_PATH)
 
 
 class TestResolveAndFetch:
     @responses.activate
-    def test_import_by_arxiv_id(self, config_path, vault_path, output_path):
-        """Test: arxiv_id → resolve → fetch → JSON output."""
+    def test_import_by_arxiv_id(self, config_path, mock_cli, output_path):
+        """Test: arxiv_id -> resolve -> fetch -> JSON output."""
         responses.add(
             responses.GET,
             "https://export.arxiv.org/api/query",
@@ -28,14 +30,13 @@ class TestResolveAndFetch:
             "resolve_and_fetch.py",
             "--inputs", "2406.12345",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-import.scripts.resolve_and_fetch")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert len(result["papers"]) == 1
@@ -45,8 +46,8 @@ class TestResolveAndFetch:
         assert "matched_keywords" in result["papers"][0]
 
     @responses.activate
-    def test_import_by_url(self, config_path, vault_path, output_path):
-        """Test: arXiv URL → extract ID → fetch."""
+    def test_import_by_url(self, config_path, mock_cli, output_path):
+        """Test: arXiv URL -> extract ID -> fetch."""
         responses.add(
             responses.GET,
             "https://export.arxiv.org/api/query",
@@ -58,14 +59,13 @@ class TestResolveAndFetch:
             "resolve_and_fetch.py",
             "--inputs", "https://arxiv.org/abs/2406.12345",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-import.scripts.resolve_and_fetch")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert len(result["papers"]) == 1
@@ -73,36 +73,26 @@ class TestResolveAndFetch:
         assert result["resolution_results"][0]["arxiv_id"] == "2406.12345"
 
     @responses.activate
-    def test_dedup_against_vault(self, config_path, vault_path, output_path):
+    def test_dedup_against_vault(self, config_path, mock_cli, output_path):
         """Test: paper already in vault appears in duplicates."""
-        note = vault_path / "20_Papers" / "coding-agent" / "Existing.md"
-        note.write_text(textwrap.dedent("""\
-            ---
-            arxiv_id: "2406.12345"
-            title: "Existing Paper"
-            ---
-            Content.
-        """))
-
         argv = [
             "resolve_and_fetch.py",
             "--inputs", "2406.12345",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-import.scripts.resolve_and_fetch")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value={"2406.12345"}):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert "2406.12345" in result["duplicates"]
         assert len(result["papers"]) == 0
 
     @responses.activate
-    def test_mixed_valid_and_invalid(self, config_path, vault_path, output_path):
+    def test_mixed_valid_and_invalid(self, config_path, mock_cli, output_path):
         """Test: mix of valid ID + unresolvable title."""
         # First call: title search returns empty
         responses.add(
@@ -123,14 +113,13 @@ class TestResolveAndFetch:
             "resolve_and_fetch.py",
             "--inputs", "2406.12345", "Nonexistent Paper XYZ",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-import.scripts.resolve_and_fetch")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert len(result["papers"]) == 1
@@ -138,7 +127,7 @@ class TestResolveAndFetch:
         assert "Nonexistent" in result["errors"][0]["raw_input"]
 
     @responses.activate
-    def test_output_structure(self, config_path, vault_path, output_path):
+    def test_output_structure(self, config_path, mock_cli, output_path):
         """Test: output JSON has all required top-level keys."""
         responses.add(
             responses.GET,
@@ -151,14 +140,13 @@ class TestResolveAndFetch:
             "resolve_and_fetch.py",
             "--inputs", "2406.12345",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-import.scripts.resolve_and_fetch")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert set(result.keys()) == {"resolution_results", "duplicates", "papers", "errors"}

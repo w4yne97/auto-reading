@@ -2,19 +2,21 @@
 
 import json
 import sys
-import textwrap
-from pathlib import Path
+from importlib import import_module
 from unittest.mock import patch
 
 import responses
 
 from tests.conftest import SAMPLE_ARXIV_XML
 
+_MOD_PATH = "paper-search.scripts.search_papers"
+_mod = import_module(_MOD_PATH)
+
 
 class TestSearchPapers:
     @responses.activate
-    def test_keyword_search_pipeline(self, config_path, vault_path, output_path):
-        """Test: keyword search → score → JSON output."""
+    def test_keyword_search_pipeline(self, config_path, mock_cli, output_path):
+        """Test: keyword search -> score -> JSON output."""
         responses.add(
             responses.GET,
             "https://export.arxiv.org/api/query",
@@ -25,16 +27,15 @@ class TestSearchPapers:
         argv = [
             "search_papers.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--keywords", "coding agent",
             "--output", str(output_path),
             "--days", "30",
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-search.scripts.search_papers")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert "query" in result
@@ -47,17 +48,8 @@ class TestSearchPapers:
         assert isinstance(result["papers"], list)
 
     @responses.activate
-    def test_dedup_against_vault(self, config_path, vault_path, output_path):
+    def test_dedup_against_vault(self, config_path, mock_cli, output_path):
         """Test: papers already in vault are excluded from results."""
-        note = vault_path / "20_Papers" / "coding-agent" / "Existing.md"
-        note.write_text(textwrap.dedent("""\
-            ---
-            arxiv_id: "2406.12345"
-            title: "Existing Paper"
-            ---
-            Content.
-        """))
-
         responses.add(
             responses.GET,
             "https://export.arxiv.org/api/query",
@@ -68,22 +60,21 @@ class TestSearchPapers:
         argv = [
             "search_papers.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--keywords", "coding agent",
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-search.scripts.search_papers")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value={"2406.12345"}):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         paper_ids = [p["arxiv_id"] for p in result["papers"]]
         assert "2406.12345" not in paper_ids
 
     @responses.activate
-    def test_output_paper_has_truncated_abstract(self, config_path, vault_path, output_path):
+    def test_output_paper_has_truncated_abstract(self, config_path, mock_cli, output_path):
         """Test: abstracts are truncated in search results."""
         responses.add(
             responses.GET,
@@ -95,36 +86,34 @@ class TestSearchPapers:
         argv = [
             "search_papers.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--keywords", "reward model",
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-search.scripts.search_papers")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         for paper in result["papers"]:
             assert len(paper["abstract"]) <= 300
 
-    def test_invalid_days_rejected(self, config_path, vault_path, output_path):
+    def test_invalid_days_rejected(self, config_path, mock_cli, output_path):
         """Test: --days outside 1-365 range is rejected."""
         argv = [
             "search_papers.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--keywords", "test",
             "--output", str(output_path),
             "--days", "0",
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("paper-search.scripts.search_papers")
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
             with raises_system_exit(2):
-                mod.main()
+                _mod.main()
 
 
 def raises_system_exit(code):

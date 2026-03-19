@@ -3,6 +3,7 @@
 import json
 import textwrap
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -106,18 +107,19 @@ def config_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def vault_path(tmp_path: Path) -> Path:
-    """Create a temporary vault directory structure."""
-    vault = tmp_path / "vault"
-    (vault / "20_Papers" / "coding-agent").mkdir(parents=True)
-    (vault / "10_Daily").mkdir(parents=True)
-    (vault / "30_Insights").mkdir(parents=True)
-    return vault
-
-
-@pytest.fixture()
 def output_path(tmp_path: Path) -> Path:
     """Create a temporary output path."""
     out = tmp_path / "output" / "result.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     return out
+
+
+@pytest.fixture()
+def mock_cli():
+    """Create a mock ObsidianCLI instance for entry script tests."""
+    cli = MagicMock()
+    cli.vault_path = "/tmp/test-vault"
+    cli.search.return_value = []
+    cli.get_property.return_value = None
+    cli.list_files.return_value = []
+    return cli

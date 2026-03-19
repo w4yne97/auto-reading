@@ -2,7 +2,7 @@
 
 import json
 import sys
-import textwrap
+from importlib import import_module
 from unittest.mock import patch
 
 import responses
@@ -10,6 +10,8 @@ import responses
 from tests.conftest import SAMPLE_ARXIV_XML, make_alphaxiv_html
 
 _EMPTY_XML = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+_MOD_PATH = "start-my-day.scripts.search_and_filter"
+_mod = import_module(_MOD_PATH)
 
 
 def _mock_arxiv_empty():
@@ -24,8 +26,8 @@ def _mock_arxiv_empty():
 
 class TestSearchAndFilter:
     @responses.activate
-    def test_full_pipeline_with_alphaxiv(self, config_path, vault_path, output_path):
-        """Test: alphaXiv fetch → dedup → score → JSON output."""
+    def test_full_pipeline_with_alphaxiv(self, config_path, mock_cli, output_path):
+        """Test: alphaXiv fetch -> dedup -> score -> JSON output."""
         responses.add(
             responses.GET,
             "https://alphaxiv.org/explore",
@@ -37,15 +39,14 @@ class TestSearchAndFilter:
         argv = [
             "search_and_filter.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
             "--top-n", "10",
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("start-my-day.scripts.search_and_filter")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert "total_fetched" in result
@@ -56,7 +57,7 @@ class TestSearchAndFilter:
         assert isinstance(result["papers"], list)
 
     @responses.activate
-    def test_alphaxiv_fallback_to_arxiv(self, config_path, vault_path, output_path):
+    def test_alphaxiv_fallback_to_arxiv(self, config_path, mock_cli, output_path):
         """Test: when alphaXiv fails, falls back to arXiv API."""
         responses.add(
             responses.GET,
@@ -73,32 +74,22 @@ class TestSearchAndFilter:
         argv = [
             "search_and_filter.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("start-my-day.scripts.search_and_filter")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert result["total_fetched"] >= 1
 
     @responses.activate
     def test_dedup_excludes_existing_vault_papers(
-        self, config_path, vault_path, output_path
+        self, config_path, mock_cli, output_path
     ):
         """Test: papers already in vault are excluded."""
-        note = vault_path / "20_Papers" / "coding-agent" / "Neural-Code-Agent.md"
-        note.write_text(textwrap.dedent("""\
-            ---
-            arxiv_id: "2603.12228"
-            title: "Neural Code Agent"
-            ---
-            Content.
-        """))
-
         responses.add(
             responses.GET,
             "https://alphaxiv.org/explore",
@@ -110,21 +101,20 @@ class TestSearchAndFilter:
         argv = [
             "search_and_filter.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("start-my-day.scripts.search_and_filter")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value={"2603.12228"}):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         paper_ids = [p["arxiv_id"] for p in result["papers"]]
         assert "2603.12228" not in paper_ids
 
     @responses.activate
-    def test_excluded_keywords_filter(self, config_path, vault_path, output_path):
+    def test_excluded_keywords_filter(self, config_path, mock_cli, output_path):
         """Test: papers matching excluded keywords are removed."""
         survey_paper = [{
             "id": "2603.99999",
@@ -147,20 +137,19 @@ class TestSearchAndFilter:
         argv = [
             "search_and_filter.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("start-my-day.scripts.search_and_filter")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         assert result["total_after_filter"] == 0
 
     @responses.activate
-    def test_output_paper_structure(self, config_path, vault_path, output_path):
+    def test_output_paper_structure(self, config_path, mock_cli, output_path):
         """Test: each paper in output has expected fields."""
         responses.add(
             responses.GET,
@@ -173,14 +162,13 @@ class TestSearchAndFilter:
         argv = [
             "search_and_filter.py",
             "--config", str(config_path),
-            "--vault", str(vault_path),
             "--output", str(output_path),
         ]
 
-        with patch.object(sys, "argv", argv):
-            from importlib import import_module
-            mod = import_module("start-my-day.scripts.search_and_filter")
-            mod.main()
+        with patch.object(sys, "argv", argv), \
+             patch.object(_mod, "create_cli", return_value=mock_cli), \
+             patch.object(_mod, "build_dedup_set", return_value=set()):
+            _mod.main()
 
         result = json.loads(output_path.read_text())
         if result["papers"]:

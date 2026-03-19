@@ -1,24 +1,35 @@
-"""Obsidian vault operations: scan, parse, dedup, write, wikilink."""
+"""Vault business logic — all operations use ObsidianCLI."""
 
 import logging
+import os
 import re
 from datetime import date
 from pathlib import Path
 
 import yaml
 
+from lib.obsidian_cli import ObsidianCLI
+
 logger = logging.getLogger(__name__)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)^---\s*\n", re.MULTILINE | re.DOTALL)
 
 
+def create_cli(vault_name: str | None = None) -> ObsidianCLI:
+    """Create an ObsidianCLI instance."""
+    name = vault_name or os.environ.get("OBSIDIAN_VAULT_NAME")
+    return ObsidianCLI(vault_name=name)
+
+
+def get_vault_path(cli: ObsidianCLI) -> str:
+    """Return the vault's filesystem path."""
+    return cli.vault_path
+
+
 def load_config(config_path: str | Path) -> dict:
     """Load and validate a research_interests.yaml config file.
 
-    Raises SystemExit(1) with user-friendly message on:
-    - File not found
-    - YAML syntax error
-    - Empty or non-dict config
+    Signature UNCHANGED — reads YAML via filesystem, not CLI.
     """
     path = Path(config_path)
     try:
@@ -44,11 +55,7 @@ def load_config(config_path: str | Path) -> dict:
 
 
 def parse_date_field(value) -> date | None:
-    """Parse a date from frontmatter value.
-
-    Handles both Python date objects (from PyYAML auto-parsing)
-    and ISO date strings (from quoted YAML values).
-    """
+    """Parse a date from frontmatter value."""
     if isinstance(value, date):
         return value
     if isinstance(value, str):
@@ -59,11 +66,8 @@ def parse_date_field(value) -> date | None:
     return None
 
 
-def parse_frontmatter(content: str) -> dict:
-    """Parse YAML frontmatter from markdown content.
-
-    Returns empty dict if frontmatter is missing or malformed.
-    """
+def _parse_frontmatter(content: str) -> dict:
+    """Parse YAML frontmatter from markdown content (internal helper)."""
     match = _FRONTMATTER_RE.match(content)
     if not match:
         return {}
@@ -75,96 +79,126 @@ def parse_frontmatter(content: str) -> dict:
         return {}
 
 
-def scan_papers(vault_path: Path) -> list[dict]:
-    """Scan 20_Papers/ for all paper notes, return list of frontmatter dicts.
+def scan_papers(cli: ObsidianCLI) -> list[dict]:
+    """Scan 20_Papers/ for all paper notes with arxiv_id.
 
-    Tolerates missing fields — only requires arxiv_id to be present.
-    Skips notes without valid frontmatter or without arxiv_id.
+    Deduplicates by arxiv_id — if the same paper appears in multiple
+    domain folders, only the first occurrence is returned.
     """
-    papers_dir = vault_path / "20_Papers"
-    if not papers_dir.exists():
-        return []
-
+    files = cli.list_files(folder="20_Papers", ext="md")
     results = []
-    for md_file in papers_dir.rglob("*.md"):
+    seen_ids: set[str] = set()
+    for path in files:
         try:
-            content = md_file.read_text(encoding="utf-8")
-        except OSError as e:
-            logger.warning("Cannot read %s: %s", md_file, e)
+            content = cli.read_note(path)
+        except (RuntimeError, OSError) as e:
+            logger.warning("Cannot read %s: %s", path, e)
             continue
 
-        fm = parse_frontmatter(content)
-        if not fm.get("arxiv_id"):
+        fm = _parse_frontmatter(content)
+        arxiv_id = fm.get("arxiv_id")
+        if not arxiv_id or arxiv_id in seen_ids:
             continue
 
-        fm["_path"] = str(md_file.relative_to(vault_path))
+        seen_ids.add(arxiv_id)
+        fm["_path"] = path
         results.append(fm)
 
     return results
 
 
-def build_dedup_set(scan_results: list[dict]) -> set[str]:
-    """Build a set of arxiv_ids from scan results for deduplication."""
-    return {r["arxiv_id"] for r in scan_results if r.get("arxiv_id")}
+def scan_papers_since(cli: ObsidianCLI, since: date) -> list[dict]:
+    """Scan papers fetched since a given date."""
+    all_papers = scan_papers(cli)
+    return [
+        paper for paper in all_papers
+        if (fetched := parse_date_field(paper.get("fetched"))) and fetched >= since
+    ]
 
 
-def generate_wikilinks(text: str, keyword_index: dict[str, str]) -> str:
-    """Replace known keywords in text with [[wikilink]] format.
+def scan_insights_since(cli: ObsidianCLI, since: date) -> list[dict]:
+    """Scan insight notes updated since a given date."""
+    files = cli.list_files(folder="30_Insights", ext="md")
+    results = []
+    for path in files:
+        try:
+            content = cli.read_note(path)
+        except (RuntimeError, OSError) as e:
+            logger.warning("Cannot read %s: %s", path, e)
+            continue
 
-    - Skips content inside existing wikilinks [[...]]
-    - Skips content inside code blocks (``` and inline `)
-    - Case-insensitive matching
-    - Uses single-pass combined regex to avoid double-wrapping
-    """
-    if not keyword_index:
-        return text
+        fm = _parse_frontmatter(content)
+        updated = parse_date_field(fm.get("updated"))
+        if updated and updated >= since:
+            results.append({
+                "title": fm.get("title", Path(path).stem),
+                "type": fm.get("type", "unknown"),
+                "updated": updated.isoformat(),
+            })
 
-    # Split text into protected and unprotected segments
-    protected_pattern = re.compile(
-        r"```.*?```"          # fenced code blocks
-        r"|`[^`]+`"           # inline code
-        r"|\[\[[^\]]+\]\]",   # existing wikilinks
-        re.DOTALL,
-    )
-
-    parts = []
-    last_end = 0
-    for match in protected_pattern.finditer(text):
-        if match.start() > last_end:
-            segment = text[last_end : match.start()]
-            segment = _replace_keywords(segment, keyword_index)
-            parts.append(segment)
-        parts.append(match.group())  # keep protected text as-is
-        last_end = match.end()
-
-    if last_end < len(text):
-        segment = text[last_end:]
-        segment = _replace_keywords(segment, keyword_index)
-        parts.append(segment)
-
-    return "".join(parts)
+    return results
 
 
-def _replace_keywords(text: str, keyword_index: dict[str, str]) -> str:
-    """Replace keywords with wikilinks in an unprotected text segment.
+def list_daily_notes(cli: ObsidianCLI, since: date) -> list[str]:
+    """List daily note filenames since a given date."""
+    files = cli.list_files(folder="10_Daily", ext="md")
+    cutoff = since.isoformat()
+    results = []
+    for path in sorted(files, reverse=True):
+        filename = Path(path).name
+        if filename[:10] >= cutoff:
+            results.append(filename)
+    return results
 
-    Uses a single-pass combined regex to avoid double-wrapping.
-    """
-    sorted_keywords = sorted(keyword_index.keys(), key=len, reverse=True)
-    if not sorted_keywords:
-        return text
-    combined = "|".join(re.escape(kw) for kw in sorted_keywords)
-    pattern = re.compile(f"({combined})", re.IGNORECASE)
-    return pattern.sub(lambda m: f"[[{m.group()}]]", text)
+
+def build_dedup_set(cli: ObsidianCLI) -> set[str]:
+    """Build set of arxiv_ids for deduplication."""
+    paths = cli.search("arxiv_id", path="20_Papers")
+    ids = set()
+    for path in paths:
+        arxiv_id = cli.get_property(path, "arxiv_id")
+        if arxiv_id:
+            ids.add(arxiv_id)
+    return ids
 
 
-def write_note(vault_path: Path, relative_path: str, content: str) -> Path:
-    """Write a markdown note to the vault, creating directories as needed.
+def write_paper_note(
+    cli: ObsidianCLI, path: str, content: str, overwrite: bool = True
+) -> str:
+    """Write a paper note. overwrite=True by default."""
+    return cli.create_note(path, content, overwrite=overwrite)
 
-    Returns the absolute path of the written file.
-    """
-    full_path = vault_path / relative_path
-    full_path.parent.mkdir(parents=True, exist_ok=True)
-    full_path.write_text(content, encoding="utf-8")
-    logger.info("Wrote note: %s", relative_path)
-    return full_path
+
+def get_paper_status(cli: ObsidianCLI, path: str) -> str:
+    """Read paper status property."""
+    return cli.get_property(path, "status") or "unknown"
+
+
+def set_paper_status(cli: ObsidianCLI, path: str, status: str) -> None:
+    """Update paper status property."""
+    cli.set_property(path, "status", status)
+
+
+# ── New CLI-native capabilities ───────────────────────────
+
+
+def get_paper_backlinks(cli: ObsidianCLI, path: str) -> list[str]:
+    """Get files that link to this paper."""
+    return cli.backlinks(path)
+
+
+def get_paper_links(cli: ObsidianCLI, path: str) -> list[str]:
+    """Get files this paper links to."""
+    return cli.outgoing_links(path)
+
+
+def search_vault(
+    cli: ObsidianCLI, query: str, path: str | None = None, limit: int = 20
+) -> list[dict]:
+    """Full-text search with context."""
+    return cli.search_context(query, path=path, limit=limit)
+
+
+def get_unresolved_links(cli: ObsidianCLI) -> list[dict]:
+    """Get all unresolved wikilinks in the vault."""
+    return cli.unresolved_links()
