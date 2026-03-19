@@ -21,7 +21,8 @@
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 - Python 3.12+
-- [Obsidian](https://obsidian.md)（用于浏览生成的笔记）
+- [Obsidian](https://obsidian.md) 桌面端（需保持运行）
+- [Obsidian CLI](https://obsidian.md/cli)（在 Settings → General 中启用并注册到 PATH）
 
 ## 安装
 
@@ -31,6 +32,13 @@ cd auto-reading
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ```
+
+### 配置 Obsidian CLI
+
+1. 更新 Obsidian 到最新版本
+2. Settings → General → 启用 "Command line interface"
+3. 按提示注册 CLI 到系统 PATH
+4. 重启终端，验证：`obsidian --version`
 
 ## 快速开始
 
@@ -165,23 +173,38 @@ SKILL.md 编排层（.claude/skills/）
   │ import lib/
   ▼
 共享 Python 库（lib/）
-  ├── sources/alphaxiv.py   — alphaXiv 热门论文提取
-  ├── sources/arxiv_api.py  — arXiv API 搜索 + 批量获取
-  ├── resolver.py           — 输入解析（ID/URL/标题/PDF）
-  ├── scoring.py            — 规则评分引擎
-  ├── vault.py              — Vault 读写、配置、去重、wikilink
-  └── models.py             — Paper, ScoredPaper（冻结数据类）
+  ├── obsidian_cli.py         — Obsidian CLI 封装（subprocess → 类型化 API）
+  ├── vault.py                — Vault 业务逻辑（扫描、去重、写入、搜索）
+  ├── sources/alphaxiv.py     — alphaXiv 热门论文提取
+  ├── sources/arxiv_api.py    — arXiv API 搜索 + 批量获取
+  ├── resolver.py             — 输入解析（ID/URL/标题/PDF）
+  ├── scoring.py              — 规则评分引擎
+  └── models.py               — Paper, ScoredPaper（冻结数据类）
   │
   ▼
-Obsidian Vault（Markdown + YAML frontmatter）
+Obsidian CLI ──► Obsidian Vault（Markdown + YAML frontmatter）
 ```
 
-SKILL.md 是自然语言工作流定义，Claude 逐步执行。Python 负责数据获取、评分和 Vault I/O。Claude 负责 AI 分析、笔记生成和用户交互。
+SKILL.md 是自然语言工作流定义，Claude 逐步执行。Python 负责数据获取、评分和 Vault I/O（通过 Obsidian CLI）。Claude 负责 AI 分析、笔记生成和用户交互。
+
+### Obsidian CLI 集成
+
+所有 Vault 操作通过 [Obsidian CLI](https://obsidian.md/cli) 完成，利用 Obsidian 的内存索引实现高效搜索、属性读写和链接图查询。
+
+```
+lib/vault.py  →  lib/obsidian_cli.py  →  Obsidian CLI  →  Vault
+（业务逻辑）      （subprocess 封装）      （索引搜索）      （文件系统）
+```
+
+核心能力：
+- **索引搜索** — `search`、`search_context` 利用 Obsidian 全文索引
+- **属性原子操作** — `get_property`、`set_property` 读写单个 frontmatter 字段
+- **链接图** — `backlinks`、`outgoing_links`、`unresolved_links` 查询双向链接
+- **笔记管理** — `create_note`、`read_note`、`delete_note` 管理 vault 文件
 
 ## 配置示例
 
 ```yaml
-vault_path: ~/obsidian-vault
 language: "mixed"  # 论文标题/摘要英文，分析中文
 
 research_domains:
@@ -206,11 +229,14 @@ scoring_weights:
 ## 开发
 
 ```bash
-# 运行全部测试（130 个测试，约 0.5s）
+# 运行全部单元测试（170+ 测试，约 0.5s）
 pytest
 
 # 带覆盖率（目标 80%，当前 96%）
 pytest --cov=lib --cov-report=term-missing
+
+# 运行集成测试（需要 Obsidian 运行中）
+pytest -m integration -v
 
 # 单个模块
 pytest tests/test_resolver.py -v
