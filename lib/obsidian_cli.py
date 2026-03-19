@@ -45,6 +45,10 @@ class ObsidianCLI:
     def _find_cli() -> str:
         env_path = os.environ.get("OBSIDIAN_CLI_PATH")
         if env_path:
+            if not Path(env_path).exists():
+                raise CLINotFoundError(
+                    f"OBSIDIAN_CLI_PATH points to non-existent path: {env_path}"
+                )
             return env_path
 
         which_path = shutil.which("obsidian")
@@ -76,10 +80,10 @@ class ObsidianCLI:
                 text=True,
                 timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             raise TimeoutError(
                 f"Obsidian CLI timed out after {timeout}s: {' '.join(cmd)}"
-            )
+            ) from exc
 
         if result.returncode != 0:
             stderr = result.stderr.strip()

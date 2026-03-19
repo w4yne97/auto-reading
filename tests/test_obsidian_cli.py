@@ -52,6 +52,12 @@ class TestCLIDiscovery:
             with pytest.raises(CLINotFoundError):
                 ObsidianCLI()
 
+    def test_raises_cli_not_found_bad_env_path(self):
+        with patch.dict("os.environ", {"OBSIDIAN_CLI_PATH": "/nonexistent/obsidian"}), \
+             patch("pathlib.Path.exists", return_value=False):
+            with pytest.raises(CLINotFoundError, match="non-existent path"):
+                ObsidianCLI()
+
 
 class TestRun:
     @pytest.fixture()
