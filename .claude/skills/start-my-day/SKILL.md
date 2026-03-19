@@ -143,14 +143,25 @@ papers_count: 10
 
 **Top 3 详细笔记生成**：对排名前 3 的论文，分别调用 paper-analyze 的 generate_note.py 获取完整元数据，然后按 paper-analyze 的流程生成论文笔记到 `20_Papers/<domain>/` 目录。
 
-## Step 6: 自动 Wikilink
+## Step 6: Wikilink 与断链检查
 
-扫描生成的每日笔记内容，将以下关键词自动转为 Obsidian wikilink `[[keyword]]`：
-- 已存在的 `20_Papers/` 下的论文笔记标题
-- 已存在的 `30_Insights/` 下的主题和技术点名称
-- 配置中 `research_domains` 的关键词
+生成笔记时，将论文标题和 Insight 技术点名称内嵌为 `[[wikilink]]`。具体做法：
 
-注意：不要对已在 wikilink 中的文本重复添加，不要修改代码块中的内容。
+1. 使用 Obsidian CLI 获取已有的 Insight 笔记列表：
+   ```bash
+   obsidian files folder=30_Insights ext=md
+   ```
+2. 生成笔记内容时，将匹配的 Insight 名称写为 `[[name]]` 格式
+3. 笔记写入后，用 Obsidian CLI 检查断链：
+   ```bash
+   obsidian unresolved format=json
+   ```
+4. 如果发现与今日笔记相关的未解析链接（目标不存在的 `[[wikilink]]`），在笔记末尾追加提示：
+   ```
+   > ⚠️ 未解析链接: [[missing-note-1]], [[missing-note-2]]
+   > 可运行 `/insight-init` 创建对应主题，或检查拼写。
+   ```
+   如果没有断链则不追加任何内容。
 
 ## Step 7: Idea Spark 检查
 
