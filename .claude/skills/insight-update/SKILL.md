@@ -29,7 +29,6 @@ description: 扫描新论文，更新 Insight 主题的技术点和发展脉络
 
 ```bash
 python insight-update/scripts/scan_recent_papers.py \
-  --vault "$VAULT_PATH" \
   --since {_index.md 的 updated 日期} \
   --output /tmp/auto-reading/recent_papers.json
 ```

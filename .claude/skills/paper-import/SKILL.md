@@ -50,7 +50,6 @@ description: 批量导入已有论文到 Obsidian vault 知识体系（支持 ar
 python paper-import/scripts/resolve_and_fetch.py \
   --inputs {input1} {input2} ... \
   --config "$VAULT_PATH/00_Config/research_interests.yaml" \
-  --vault "$VAULT_PATH" \
   --output /tmp/auto-reading/import_result.json
 ```
 

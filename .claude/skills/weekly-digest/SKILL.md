@@ -19,7 +19,6 @@ description: 生成每周论文总结，包括 Top 论文、领域概况和 Insi
 
 ```bash
 python weekly-digest/scripts/generate_digest.py \
-  --vault "$VAULT_PATH" \
   --output /tmp/auto-reading/digest_data.json \
   --days 7
 ```
