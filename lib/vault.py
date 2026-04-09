@@ -152,13 +152,35 @@ def list_daily_notes(cli: ObsidianCLI, since: date) -> list[str]:
 
 
 def build_dedup_set(cli: ObsidianCLI) -> set[str]:
-    """Build set of arxiv_ids for deduplication."""
-    paths = cli.search("arxiv_id", path="20_Papers")
-    ids = set()
-    for path in paths:
-        arxiv_id = cli.get_property(path, "arxiv_id")
-        if arxiv_id:
-            ids.add(arxiv_id)
+    """Build set of arxiv_ids for deduplication.
+
+    Uses filesystem-based frontmatter parsing instead of per-file CLI calls
+    to avoid spawning 200+ Obsidian processes (which causes window-flood
+    and IPC timeout on macOS).
+    """
+    vault_path = Path(cli.vault_path)
+    papers_dir = vault_path / "20_Papers"
+    if not papers_dir.exists():
+        return set()
+
+    ids: set[str] = set()
+    for md_file in papers_dir.rglob("*.md"):
+        try:
+            text = md_file.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        m = _FRONTMATTER_RE.match(text)
+        if not m:
+            continue
+        try:
+            fm = yaml.safe_load(m.group(1))
+        except yaml.YAMLError:
+            continue
+        if isinstance(fm, dict):
+            arxiv_id = fm.get("arxiv_id")
+            if arxiv_id:
+                ids.add(str(arxiv_id))
+    logger.info("Dedup set: %d existing papers", len(ids))
     return ids
 
 

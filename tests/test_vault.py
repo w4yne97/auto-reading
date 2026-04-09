@@ -220,23 +220,51 @@ class TestListDailyNotes:
 
 
 class TestBuildDedupSet:
-    def test_build_dedup_set(self, mock_cli):
-        mock_cli.search.return_value = [
-            "20_Papers/a/p1.md",
-            "20_Papers/b/p2.md",
-        ]
-        mock_cli.get_property.side_effect = ["2406.00001", "2406.00002"]
+    def test_build_dedup_set(self, mock_cli, tmp_path):
+        papers = tmp_path / "20_Papers" / "a"
+        papers.mkdir(parents=True)
+        (papers / "p1.md").write_text(
+            '---\ntitle: "P1"\narxiv_id: "2406.00001"\n---\n# P1\n'
+        )
+        (papers / "p2.md").write_text(
+            '---\ntitle: "P2"\narxiv_id: "2406.00002"\n---\n# P2\n'
+        )
+        mock_cli.vault_path = str(tmp_path)
         result = build_dedup_set(mock_cli)
         assert result == {"2406.00001", "2406.00002"}
-        mock_cli.search.assert_called_once_with("arxiv_id", path="20_Papers")
 
-    def test_build_dedup_set_empty(self, mock_cli):
-        mock_cli.search.return_value = []
+    def test_build_dedup_set_empty(self, mock_cli, tmp_path):
+        (tmp_path / "20_Papers").mkdir(parents=True)
+        mock_cli.vault_path = str(tmp_path)
         assert build_dedup_set(mock_cli) == set()
 
-    def test_build_dedup_set_skips_none_property(self, mock_cli):
-        mock_cli.search.return_value = ["p1.md", "p2.md"]
-        mock_cli.get_property.side_effect = ["2406.00001", None]
+    def test_build_dedup_set_no_papers_dir(self, mock_cli, tmp_path):
+        mock_cli.vault_path = str(tmp_path)
+        assert build_dedup_set(mock_cli) == set()
+
+    def test_build_dedup_set_skips_none_property(self, mock_cli, tmp_path):
+        papers = tmp_path / "20_Papers" / "a"
+        papers.mkdir(parents=True)
+        (papers / "p1.md").write_text(
+            '---\ntitle: "P1"\narxiv_id: "2406.00001"\n---\n# P1\n'
+        )
+        (papers / "p2.md").write_text(
+            '---\ntitle: "P2"\n---\n# No arxiv_id\n'
+        )
+        mock_cli.vault_path = str(tmp_path)
+        result = build_dedup_set(mock_cli)
+        assert result == {"2406.00001"}
+
+    def test_build_dedup_set_skips_malformed_yaml(self, mock_cli, tmp_path):
+        papers = tmp_path / "20_Papers" / "a"
+        papers.mkdir(parents=True)
+        (papers / "good.md").write_text(
+            '---\ntitle: "Good"\narxiv_id: "2406.00001"\n---\n'
+        )
+        (papers / "bad.md").write_text(
+            '---\ntitle: "Bad "nested" quotes"\narxiv_id: "2406.00002"\n---\n'
+        )
+        mock_cli.vault_path = str(tmp_path)
         result = build_dedup_set(mock_cli)
         assert result == {"2406.00001"}
 
