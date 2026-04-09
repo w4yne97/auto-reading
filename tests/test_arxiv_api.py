@@ -2,6 +2,7 @@
 
 import textwrap
 from datetime import date
+from urllib.parse import unquote
 
 import pytest
 import responses
@@ -71,6 +72,78 @@ class TestSearchArxiv:
         )
         assert len(papers) == 1
         assert papers[0].arxiv_id == "2406.12345"
+
+    @responses.activate
+    def test_multi_word_keyword_uses_and_not_phrase(self):
+        """Multi-word keyword should AND individual words, not phrase match.
+
+        Regression: previously `"code review benchmark"` was sent as
+        `all:"code review benchmark"` which required the exact 3-word sequence
+        and missed papers like "Code Review Agent Benchmark".
+        """
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=SAMPLE_XML,
+            status=200,
+        )
+        search_arxiv(
+            keywords=["code review benchmark"],
+            categories=[],
+            max_results=5,
+            days=30,
+            retry_delay=0,
+        )
+        assert len(responses.calls) == 1
+        sent_url = unquote(responses.calls[0].request.url)
+        # Must AND the three words, must NOT phrase-quote the whole string
+        assert "all:code" in sent_url
+        assert "all:review" in sent_url
+        assert "all:benchmark" in sent_url
+        assert "AND" in sent_url
+        assert '"code review benchmark"' not in sent_url
+
+    @responses.activate
+    def test_single_word_keyword_no_and(self):
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=SAMPLE_XML,
+            status=200,
+        )
+        search_arxiv(
+            keywords=["SWE-bench"],
+            categories=[],
+            max_results=5,
+            days=30,
+            retry_delay=0,
+        )
+        sent_url = unquote(responses.calls[0].request.url)
+        assert "all:SWE-bench" in sent_url
+
+    @responses.activate
+    def test_multiple_keyword_args_use_or_between_groups(self):
+        responses.add(
+            responses.GET,
+            "https://export.arxiv.org/api/query",
+            body=SAMPLE_XML,
+            status=200,
+        )
+        search_arxiv(
+            keywords=["reinforcement learning", "code generation"],
+            categories=[],
+            max_results=5,
+            days=30,
+            retry_delay=0,
+        )
+        sent_url = unquote(responses.calls[0].request.url)
+        # Each multi-word arg becomes an AND group; groups are OR'd
+        assert "all:reinforcement" in sent_url
+        assert "all:learning" in sent_url
+        assert "all:code" in sent_url
+        assert "all:generation" in sent_url
+        assert "OR" in sent_url
+        assert "AND" in sent_url
 
     @responses.activate
     def test_search_retries_on_503(self):

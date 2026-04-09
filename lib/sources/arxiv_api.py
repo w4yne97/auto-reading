@@ -102,8 +102,24 @@ def search_arxiv(
     """Search arXiv by keywords and categories within a date range."""
     query_parts = []
     if keywords:
-        kw_query = " OR ".join(f'all:"{kw}"' for kw in keywords)
-        query_parts.append(f"({kw_query})")
+        # Each keyword arg is treated as "all words must appear" (AND within arg).
+        # Multiple keyword args are "any group can match" (OR between args).
+        # This matches Google-like semantics and avoids accidental exact-phrase
+        # misses — e.g. "code review benchmark" must not require those 3 words to
+        # appear in sequence, which would skip "Code Review Agent Benchmark".
+        kw_groups = []
+        for kw in keywords:
+            words = kw.split()
+            if not words:
+                continue
+            if len(words) == 1:
+                kw_groups.append(f"all:{words[0]}")
+            else:
+                and_expr = " AND ".join(f"all:{w}" for w in words)
+                kw_groups.append(f"({and_expr})")
+        if kw_groups:
+            kw_query = " OR ".join(kw_groups)
+            query_parts.append(f"({kw_query})")
     if categories:
         cat_query = " OR ".join(f"cat:{cat}" for cat in categories)
         query_parts.append(f"({cat_query})")
