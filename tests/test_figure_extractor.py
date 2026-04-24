@@ -74,3 +74,14 @@ def test_page_render_fallback(synthetic_pdf: Path, tmp_path: Path):
     assert rendered[0].page == 2
     assert rendered[0].bbox is None
     assert (out_dir / rendered[0].file_name).exists()
+
+
+def test_caption_association(synthetic_pdf: Path, tmp_path: Path):
+    out_dir = tmp_path / "candidates"
+    candidates = extract_candidates(synthetic_pdf, out_dir)
+    page1 = next(c for c in candidates if c.page == 1 and c.kind == "embedded")
+    page3 = next(c for c in candidates if c.page == 3 and c.kind == "embedded")
+    assert page1.nearest_caption is not None
+    assert "Figure 1" in page1.nearest_caption
+    assert page3.nearest_caption is not None
+    assert "Figure 2" in page3.nearest_caption

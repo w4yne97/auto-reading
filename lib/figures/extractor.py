@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -80,6 +81,38 @@ def _candidate_to_dict(c: FigureCandidate) -> dict:
     return d
 
 
+_CAPTION_RE = re.compile(r"^\s*(Figure|Table|Fig\.?)\s+\d+", re.IGNORECASE)
+
+
+def _nearest_caption(
+    page: fitz.Page,
+    bbox: tuple[float, float, float, float] | None,
+    max_distance_px: float = 200.0,
+) -> str | None:
+    """Return the closest 'Figure N: ...' / 'Table N: ...' line within
+    max_distance_px BELOW the image bbox. Returns None if nothing matches."""
+    if bbox is None:
+        return None
+    x0, y0, x1, y1 = bbox
+    blocks = page.get_text("blocks")
+    # blocks: [(x0, y0, x1, y1, text, block_no, block_type), ...]
+    best: tuple[float, str] | None = None
+    for bx0, by0, bx1, by1, text, _, btype in blocks:
+        if btype != 0:  # 0 = text
+            continue
+        first_line = text.strip().split("\n", 1)[0]
+        if not _CAPTION_RE.match(first_line):
+            continue
+        if by0 < y1:  # must be BELOW the image
+            continue
+        dist = by0 - y1
+        if dist > max_distance_px:
+            continue
+        if best is None or dist < best[0]:
+            best = (dist, first_line.strip())
+    return best[1] if best else None
+
+
 def _extract_embedded(
     doc: fitz.Document, output_dir: Path, min_side_px: int
 ) -> list[FigureCandidate]:
@@ -104,6 +137,7 @@ def _extract_embedded(
             pix = None  # release
 
             bbox = _find_image_bbox(page, xref)
+            nearest = _nearest_caption(page, bbox)
             out.append(
                 FigureCandidate(
                     id=f"img_p{page_num:02d}_{idx:02d}",
@@ -113,7 +147,7 @@ def _extract_embedded(
                     kind="embedded",
                     width=width,
                     height=height,
-                    nearest_caption=None,
+                    nearest_caption=nearest,
                 )
             )
     return out
