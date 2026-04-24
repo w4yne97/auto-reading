@@ -1,6 +1,7 @@
 """arXiv PDF downloader with local filesystem cache."""
 
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -53,7 +54,9 @@ def download_pdf(
         try:
             resp = requests.get(url, timeout=60, stream=True)
             resp.raise_for_status()
-            target.write_bytes(resp.content)
+            tmp_target = target.with_suffix(target.suffix + ".tmp")
+            tmp_target.write_bytes(resp.content)
+            os.replace(tmp_target, target)
             logger.info("Downloaded %s (%d bytes)", target, target.stat().st_size)
             return target
         except (requests.ConnectionError, requests.HTTPError, requests.Timeout) as exc:

@@ -102,3 +102,48 @@ def test_invalid_arxiv_id_format(tmp_path):
         download_pdf("cs/0601001", cache_dir=tmp_path)
     with pytest.raises(InvalidArxivIdError):
         download_pdf("not-an-id", cache_dir=tmp_path)
+
+
+@responses.activate
+def test_download_raises_runtime_error_after_all_retries(tmp_path):
+    import requests
+    for _ in range(3):
+        responses.add(
+            responses.GET,
+            "https://arxiv.org/pdf/2603.27703.pdf",
+            body=requests.ConnectionError("boom"),
+        )
+    with pytest.raises(RuntimeError):
+        download_pdf("2603.27703", cache_dir=tmp_path, retry_backoff=0)
+    assert len(responses.calls) == 3
+
+
+def test_atomic_write_via_tmp_and_replace(tmp_path, monkeypatch):
+    """The download writes to a .tmp sibling then os.replace to final target."""
+    from lib.sources import arxiv_pdf
+    import os
+
+    seen_tmp_paths: list[Path] = []
+    real_replace = os.replace
+
+    def tracking_replace(src, dst):
+        seen_tmp_paths.append(Path(str(src)))
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(arxiv_pdf.os, "replace", tracking_replace)
+
+    with responses.RequestsMock() as rsps:
+        rsps.add(
+            rsps.GET,
+            "https://arxiv.org/pdf/2603.27703.pdf",
+            body=PDF_BYTES,
+            status=200,
+        )
+        download_pdf("2603.27703", cache_dir=tmp_path, retry_backoff=0)
+
+    # Confirm: os.replace was called with a .tmp source
+    assert len(seen_tmp_paths) == 1
+    assert seen_tmp_paths[0].name.endswith(".tmp")
+    # Final file exists; .tmp does not
+    assert (tmp_path / "2603.27703.pdf").read_bytes() == PDF_BYTES
+    assert not (tmp_path / "2603.27703.pdf.tmp").exists()
