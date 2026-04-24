@@ -31,11 +31,14 @@ def extract_candidates(
     output_dir: Path,
     *,
     min_side_px: int = 100,
+    render_dpi: int = 200,
 ) -> list[FigureCandidate]:
     """Extract figure candidates from pdf_path into output_dir.
 
     Clears output_dir if it exists, then writes one PNG per candidate plus
-    a candidates.json manifest. Returns the list ordered by (page asc, xref asc).
+    a candidates.json manifest. Returns the list ordered by (page asc, id asc).
+    Pages with embedded images are extracted as-is; pages with no embedded
+    images fall back to a full-page render via PyMuPDF get_pixmap.
     """
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -44,8 +47,16 @@ def extract_candidates(
     doc = fitz.open(pdf_path)
     try:
         candidates = _extract_embedded(doc, output_dir, min_side_px)
+        rendered = _extract_page_renders(
+            doc, output_dir,
+            exclude_pages={c.page for c in candidates if c.kind == "embedded"},
+            dpi=render_dpi,
+        )
+        candidates.extend(rendered)
     finally:
         doc.close()
+
+    candidates.sort(key=lambda c: (c.page, c.id))
 
     manifest_path = output_dir / "candidates.json"
     manifest_path.write_text(
@@ -118,3 +129,36 @@ def _find_image_bbox(
             if bbox:
                 return tuple(bbox)
     return None
+
+
+def _extract_page_renders(
+    doc: fitz.Document,
+    output_dir: Path,
+    *,
+    exclude_pages: set[int],
+    dpi: int,
+) -> list[FigureCandidate]:
+    """Render full pages as PNG for pages that have no embedded images."""
+    out: list[FigureCandidate] = []
+    zoom = dpi / 72
+    mat = fitz.Matrix(zoom, zoom)
+    for page_idx in range(doc.page_count):
+        page_num = page_idx + 1
+        if page_num in exclude_pages:
+            continue
+        pix = doc[page_idx].get_pixmap(matrix=mat)
+        file_name = f"img_p{page_num:02d}_render.png"
+        pix.save(output_dir / file_name)
+        out.append(
+            FigureCandidate(
+                id=f"img_p{page_num:02d}_render",
+                file_name=file_name,
+                page=page_num,
+                bbox=None,
+                kind="page-render",
+                width=pix.width,
+                height=pix.height,
+                nearest_caption=None,
+            )
+        )
+    return out

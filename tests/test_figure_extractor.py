@@ -63,3 +63,14 @@ def test_output_dir_cleared_on_rerun(synthetic_pdf: Path, tmp_path: Path):
     (out_dir / "stale.png").write_bytes(b"stale")
     extract_candidates(synthetic_pdf, out_dir)
     assert not (out_dir / "stale.png").exists()
+
+
+def test_page_render_fallback(synthetic_pdf: Path, tmp_path: Path):
+    out_dir = tmp_path / "candidates"
+    candidates = extract_candidates(synthetic_pdf, out_dir)
+    # Page 2 has no embedded images → must produce a page-render candidate
+    rendered = [c for c in candidates if c.kind == "page-render"]
+    assert len(rendered) == 1
+    assert rendered[0].page == 2
+    assert rendered[0].bbox is None
+    assert (out_dir / rendered[0].file_name).exists()
